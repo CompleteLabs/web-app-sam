@@ -64,7 +64,7 @@ class VisitResource extends Resource
                                     ->afterStateUpdated(function ($state, callable $set) {
                                         if ($state) {
                                             $outlet = \App\Models\Outlet::find($state);
-                                            $set('checkin_location', $outlet?->latlong ?? null);
+                                            $set('checkin_location', $outlet?->location ?? null);
                                         } else {
                                             $set('checkin_location', null);
                                         }
@@ -161,34 +161,111 @@ class VisitResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('visit_date')
-                    ->date(),
+                    ->label('Visit Date')
+                    ->date('M j, Y'),
                 Tables\Columns\TextColumn::make('user.name')
-                    ->label('Name')
+                    ->label('Sales Person')
                     ->searchable(),
                 Tables\Columns\TextColumn::make('outlet.name')
-                    ->label('Outlet Name')
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('type'),
-                Tables\Columns\TextColumn::make('checkin_location'),
-                Tables\Columns\TextColumn::make('checkout_location'),
+                    ->label('Outlet')
+                    ->searchable()
+                    ->limit(30)
+                    ->tooltip(function (Tables\Columns\TextColumn $column): ?string {
+                        $state = $column->getState();
+                        if (strlen($state) <= 30) {
+                            return null;
+                        }
+                        return $state;
+                    }),
+                Tables\Columns\TextColumn::make('type')
+                    ->label('Visit Type')
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'PLANNED' => 'primary',
+                        'EXTRACALL' => 'info',
+                        default => 'gray',
+                    })
+                    ->icon(fn (string $state): string => match ($state) {
+                        'PLANNED' => 'heroicon-o-calendar',
+                        'EXTRACALL' => 'heroicon-o-bolt',
+                        default => 'heroicon-o-question-mark-circle',
+                    }),
                 Tables\Columns\TextColumn::make('checkin_time')
-                    ->time(),
+                    ->label('Check-in')
+                    ->time('H:i'),
                 Tables\Columns\TextColumn::make('checkout_time')
-                    ->time(),
-                Tables\Columns\TextColumn::make('transaction'),
+                    ->label('Check-out')
+                    ->time('H:i'),
                 Tables\Columns\TextColumn::make('duration')
-                    ->numeric(),
+                    ->label('Duration')
+                    ->formatStateUsing(fn ($state) => $state ? $state . ' min' : 'N/A')
+                    ->sortable()
+                    ->toggleable(),
+                Tables\Columns\TextColumn::make('transaction')
+                    ->label('Transaction')
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'YES' => 'success',
+                        'NO' => 'danger',
+                        default => 'gray',
+                    })
+                    ->icon(fn (string $state): string => match ($state) {
+                        'YES' => 'heroicon-o-check-circle',
+                        'NO' => 'heroicon-o-x-circle',
+                        default => 'heroicon-o-question-mark-circle',
+                    }),
+                Tables\Columns\ImageColumn::make('checkin_photo')
+                    ->label('Check-in Photo')
+                    ->square()
+                    ->size(50)
+                    ->toggleable(),
+                Tables\Columns\ImageColumn::make('checkout_photo')
+                    ->label('Check-out Photo')
+                    ->square()
+                    ->size(50)
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('checkin_location')
+                    ->label('Check-in Location')
+                    ->formatStateUsing(function ($state) {
+                        if (!$state) return '-';
+                        return 'View Map';
+                    })
+                    ->url(function ($record) {
+                        if (!$record->checkin_location) return null;
+                        return "https://www.google.com/maps?q={$record->checkin_location}";
+                    })
+                    ->openUrlInNewTab()
+                    ->color('primary')
+                    ->icon('heroicon-o-map-pin')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('checkout_location')
+                    ->label('Check-out Location')
+                    ->formatStateUsing(function ($state) {
+                        if (!$state) return '-';
+                        return 'View Map';
+                    })
+                    ->url(function ($record) {
+                        if (!$record->checkout_location) return null;
+                        return "https://www.google.com/maps?q={$record->checkout_location}";
+                    })
+                    ->openUrlInNewTab()
+                    ->color('primary')
+                    ->icon('heroicon-o-map-pin')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('created_at')
-                    ->dateTime()
+                    ->label('Created')
+                    ->dateTime('M j, Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('updated_at')
-                    ->dateTime()
+                    ->label('Updated')
+                    ->dateTime('M j, Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->defaultSort('checkin_time', 'desc')
+            ->defaultSort('created_at', 'desc')
             ->deferLoading()
+            ->striped()
             ->filters([
                 TrashedFilter::make(),
             ])

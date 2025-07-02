@@ -73,21 +73,118 @@ class PlanVisitResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('user.name'),
-                Tables\Columns\TextColumn::make('outlet.name'),
                 Tables\Columns\TextColumn::make('visit_date')
-                    ->date(),
+                    ->label('Tanggal Visit')
+                    ->date('M j, Y'),
+                Tables\Columns\TextColumn::make('user.name')
+                    ->label('Sales Person')
+                    ->searchable()
+                    ->formatStateUsing(function ($record) {
+                        $roleName = $record->user->role ? $record->user->role->name : '';
+                        return $record->user->name . ($roleName ? " ({$roleName})" : '');
+                    }),
+                Tables\Columns\TextColumn::make('outlet.code')
+                    ->label('Kode Outlet')
+                    ->searchable()
+                    ->copyable()
+                    ->weight('bold'),
+                Tables\Columns\TextColumn::make('outlet.name')
+                    ->label('Nama Outlet')
+                    ->searchable()
+                    ->limit(40)
+                    ->tooltip(function (Tables\Columns\TextColumn $column): ?string {
+                        $state = $column->getState();
+                        if (strlen($state) <= 40) {
+                            return null;
+                        }
+                        return $state;
+                    }),
+                Tables\Columns\TextColumn::make('outlet.level')
+                    ->label('Level Outlet')
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'LEAD' => 'warning',
+                        'NOO' => 'info',
+                        'MEMBER' => 'success',
+                        default => 'gray',
+                    })
+                    ->icon(fn (string $state): string => match ($state) {
+                        'LEAD' => 'heroicon-o-star',
+                        'NOO' => 'heroicon-o-user-plus',
+                        'MEMBER' => 'heroicon-o-user-group',
+                        default => 'heroicon-o-question-mark-circle',
+                    })
+                    ->toggleable(),
+                Tables\Columns\TextColumn::make('outlet.district')
+                    ->label('Distrik')
+                    ->searchable()
+                    ->toggleable(),
+                Tables\Columns\TextColumn::make('outlet.badanUsaha.name')
+                    ->label('Badan Usaha')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('outlet.division.name')
+                    ->label('Divisi')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('outlet.region.name')
+                    ->label('Region')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('outlet.cluster.name')
+                    ->label('Cluster')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('created_at')
-                    ->dateTime()
+                    ->label('Dibuat')
+                    ->dateTime('M j, Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('updated_at')
-                    ->dateTime()
+                    ->label('Diperbarui')
+                    ->dateTime('M j, Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->defaultSort('visit_date', 'asc')
+            ->striped()
             ->filters([
-                //
+                Tables\Filters\SelectFilter::make('user_id')
+                    ->label('Sales Person')
+                    ->relationship('user', 'name')
+                    ->searchable()
+                    ->preload(),
+                Tables\Filters\Filter::make('visit_date')
+                    ->form([
+                        Forms\Components\DatePicker::make('from')
+                            ->label('Dari Tanggal'),
+                        Forms\Components\DatePicker::make('until')
+                            ->label('Sampai Tanggal'),
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        return $query
+                            ->when(
+                                $data['from'],
+                                fn (Builder $query, $date): Builder => $query->whereDate('visit_date', '>=', $date),
+                            )
+                            ->when(
+                                $data['until'],
+                                fn (Builder $query, $date): Builder => $query->whereDate('visit_date', '<=', $date),
+                            );
+                    })
+                    ->indicateUsing(function (array $data): array {
+                        $indicators = [];
+                        if ($data['from'] ?? null) {
+                            $indicators['from'] = 'Dari: ' . \Carbon\Carbon::parse($data['from'])->toFormattedDateString();
+                        }
+                        if ($data['until'] ?? null) {
+                            $indicators['until'] = 'Sampai: ' . \Carbon\Carbon::parse($data['until'])->toFormattedDateString();
+                        }
+                        return $indicators;
+                    }),
+                Tables\Filters\SelectFilter::make('outlet.level')
+                    ->label('Level Outlet')
+                    ->options([
+                        'LEAD' => 'LEAD',
+                        'NOO' => 'NOO',
+                        'MEMBER' => 'MEMBER',
+                    ]),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),

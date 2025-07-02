@@ -268,62 +268,137 @@ class OutletResource extends Resource
                 Tables\Columns\TextColumn::make('code')
                     ->label('Kode Outlet')
                     ->searchable()
-                    ->toggleable(),
-                Tables\Columns\TextColumn::make('badanUsaha.name')
-                    ->label('Badan Usaha')
-                    ->toggleable(),
-                Tables\Columns\TextColumn::make('division.name')
-                    ->label('Divisi')
-                    ->toggleable(),
-                Tables\Columns\TextColumn::make('region.name')
-                    ->label('Region')
-                    ->toggleable(),
-                Tables\Columns\TextColumn::make('cluster.name')
-                    ->label('Cluster')
-                    ->toggleable(),
+                    ->copyable()
+                    ->weight('bold'),
                 Tables\Columns\TextColumn::make('name')
                     ->label('Nama Outlet')
                     ->searchable()
-                    ->toggleable(),
+                    ->limit(40)
+                    ->tooltip(function (Tables\Columns\TextColumn $column): ?string {
+                        $state = $column->getState();
+                        if (strlen($state) <= 40) {
+                            return null;
+                        }
+                        return $state;
+                    }),
+                Tables\Columns\TextColumn::make('level')
+                    ->label('Level')
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'LEAD' => 'warning',
+                        'NOO' => 'info',
+                        'MEMBER' => 'success',
+                        default => 'gray',
+                    })
+                    ->icon(fn (string $state): string => match ($state) {
+                        'LEAD' => 'heroicon-o-star',
+                        'NOO' => 'heroicon-o-user-plus',
+                        'MEMBER' => 'heroicon-o-user-group',
+                        default => 'heroicon-o-question-mark-circle',
+                    }),
+                Tables\Columns\TextColumn::make('status')
+                    ->label('Status')
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'MAINTAIN' => 'success',
+                        'UNMAINTAIN' => 'warning',
+                        'UNPRODUCTIVE' => 'danger',
+                        default => 'gray',
+                    })
+                    ->icon(fn (string $state): string => match ($state) {
+                        'MAINTAIN' => 'heroicon-o-check-circle',
+                        'UNMAINTAIN' => 'heroicon-o-x-circle',
+                        'UNPRODUCTIVE' => 'heroicon-o-exclamation-circle',
+                        default => 'heroicon-o-question-mark-circle',
+                    }),
                 Tables\Columns\TextColumn::make('owner_name')
-                    ->label('Nama Pemilik Outlet')
+                    ->label('Pemilik')
+                    ->searchable()
                     ->toggleable(),
                 Tables\Columns\TextColumn::make('owner_phone')
-                    ->label('Nomor Telepon Outlet')
+                    ->label('Telepon')
+                    ->copyable()
                     ->toggleable(),
                 Tables\Columns\TextColumn::make('district')
                     ->label('Distrik')
+                    ->searchable()
                     ->toggleable(),
-                Tables\Columns\TextColumn::make('photo_shop_sign')
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('photo_front')
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('photo_left')
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('photo_right')
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('photo_id_card')
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('video')
-                    ->searchable(),
+                Tables\Columns\TextColumn::make('location')
+                    ->label('Lokasi')
+                    ->formatStateUsing(function ($state) {
+                        if (!$state) return '-';
+                        return 'View Map';
+                    })
+                    ->url(function ($record) {
+                        if (!$record->location) return null;
+                        return "https://www.google.com/maps?q={$record->location}";
+                    })
+                    ->openUrlInNewTab()
+                    ->color('primary')
+                    ->icon('heroicon-o-map-pin')
+                    ->toggleable(),
                 Tables\Columns\TextColumn::make('limit')
-                    ->numeric()
-                    ->sortable(),
+                    ->label('Limit')
+                    ->formatStateUsing(fn ($state) => $state ? 'Rp ' . number_format($state, 0, ',', '.') : 'N/A')
+                    ->toggleable(),
                 Tables\Columns\TextColumn::make('radius')
-                    ->numeric()
-                    ->sortable(),
-                Tables\Columns\TextColumn::make('location'),
-                Tables\Columns\TextColumn::make('status'),
+                    ->label('Radius')
+                    ->formatStateUsing(fn ($state) => $state ? $state . ' m' : 'N/A')
+                    ->toggleable(),
+                Tables\Columns\ImageColumn::make('photo_shop_sign')
+                    ->label('Foto Papan')
+                    ->square()
+                    ->size(50)
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\ImageColumn::make('photo_front')
+                    ->label('Foto Depan')
+                    ->square()
+                    ->size(50)
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\ImageColumn::make('photo_left')
+                    ->label('Foto Kiri')
+                    ->square()
+                    ->size(50)
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\ImageColumn::make('photo_right')
+                    ->label('Foto Kanan')
+                    ->square()
+                    ->size(50)
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\ImageColumn::make('photo_id_card')
+                    ->label('Foto KTP')
+                    ->square()
+                    ->size(50)
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('badanUsaha.name')
+                    ->label('Badan Usaha')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('division.name')
+                    ->label('Divisi')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('region.name')
+                    ->label('Region')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('cluster.name')
+                    ->label('Cluster')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('created_at')
-                    ->dateTime()
+                    ->label('Dibuat')
+                    ->dateTime('M j, Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('updated_at')
-                    ->dateTime()
+                    ->label('Diperbarui')
+                    ->dateTime('M j, Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('code', 'asc')
+            ->striped()
             ->deferLoading()
             ->filters([
                 TrashedFilter::make(),
