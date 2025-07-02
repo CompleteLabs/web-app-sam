@@ -14,6 +14,7 @@ return new class extends Migration
         Schema::table('users', function (Blueprint $table) {
             $table->string('username')->unique()->after('name');
             $table->string('phone')->nullable()->after('email');
+            $table->string('photo')->nullable()->after('phone');
             // Relasi ke TM (atasan langsung)
             $table->unsignedBigInteger('tm_id')->nullable()->after('phone');
             $table->unsignedBigInteger('role_id')->nullable()->after('tm_id');
@@ -38,6 +39,7 @@ return new class extends Migration
             $table->dropColumn([
                 'username',
                 'phone',
+                'photo',
                 'tm_id',
                 'role_id',
                 'notif_id',

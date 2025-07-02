@@ -20,6 +20,7 @@ class UserResource extends JsonResource
             'username' => $this->username,
             'email' => $this->email,
             'phone' => $this->phone,
+            'photo' => $this->photo_url,
             'role_id' => $this->role_id,
             'tm_id' => $this->tm_id,
             'notif_id' => $this->when($this->shouldShowSensitiveData($request), $this->notif_id),

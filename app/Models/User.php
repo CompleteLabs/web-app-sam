@@ -28,6 +28,7 @@ class User extends Authenticatable implements FilamentUser
         'username',
         'email',
         'phone',
+        'photo',
         'password',
         'role_id',
         'tm_id',
@@ -63,6 +64,7 @@ class User extends Authenticatable implements FilamentUser
         'name',
         'email',
         'phone',
+        'photo',
         'role_id',
         'tm_id',
         'notif_id',
@@ -71,6 +73,19 @@ class User extends Authenticatable implements FilamentUser
     public function canAccessPanel(Panel $panel): bool
     {
         return $this->role->can_access_web == 1;
+    }
+
+    /**
+     * Get the photo URL with automatic fallback to generated avatar
+     */
+    public function getPhotoUrlAttribute(): string
+    {
+        if ($this->photo) {
+            return asset('storage/' . $this->photo);
+        }
+
+        $name = urlencode($this->name ?? 'User');
+        return "https://ui-avatars.com/api/?name={$name}&color=7F9CF5&background=EBF4FF&size=128";
     }
 
     // Relationships
@@ -128,24 +143,4 @@ class User extends Authenticatable implements FilamentUser
 
         return $permissions->pluck('name')->toArray();
     }
-
-    /**
-     * Format user data for API response
-     */
-    // public function formatForAPI()
-    // {
-    //     return [
-    //         'id' => $this->id,
-    //         'name' => $this->name,
-    //         'username' => $this->username,
-    //         'email' => $this->email,
-    //         'phone' => $this->phone,
-    //         'badan_usaha' => $this->badanUsaha,
-    //         'division' => $this->division,
-    //         'region' => $this->region,
-    //         'cluster' => $this->cluster,
-    //         'created_at' => $this->created_at,
-    //         'updated_at' => $this->updated_at,
-    //     ];
-    // }
 }

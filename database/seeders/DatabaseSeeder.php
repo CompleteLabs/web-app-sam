@@ -21,7 +21,7 @@ class DatabaseSeeder extends Seeder
             ClusterSeeder::class,
             RoleSeeder::class,
             DynamicPermissionSeeder::class,
-            // UserSeeder::class,
+            UserSeeder::class,
         ]);
     }
 }

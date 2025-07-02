@@ -20,7 +20,7 @@ class UserSeeder extends Seeder
             'name' => 'Super Admin',
             'username' => 'admin',
             'password' => Hash::make('password'),
-            'phone' => '08123456789',
+            'phone' => '628123456789',
             'role_id' => 5,
         ]);
     }

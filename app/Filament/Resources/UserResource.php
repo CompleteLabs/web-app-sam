@@ -31,7 +31,7 @@ class UserResource extends Resource
             ->schema([
                 Forms\Components\Group::make()
                     ->schema([
-                        Forms\Components\Section::make()
+                        Forms\Components\Section::make('Informasi Pengguna')
                             ->schema([
                                 Forms\Components\TextInput::make('name')
                                     ->required()
@@ -49,6 +49,16 @@ class UserResource extends Resource
                                     ->tel()
                                     ->required()
                                     ->helperText('Nomor handphone harus aktif (untuk login menggunakan WhatsApp)'),
+                                Forms\Components\FileUpload::make('photo')
+                                    ->label('Foto Profile')
+                                    ->image()
+                                    ->imageEditor()
+                                    ->imageEditorAspectRatios([
+                                        '1:1',
+                                    ])
+                                    ->directory('users/photos')
+                                    ->visibility('public')
+                                    ->columnSpanFull(),
                                 Forms\Components\Select::make('role_id')
                                     ->relationship('role', 'name')
                                     ->searchable()
@@ -242,10 +252,27 @@ class UserResource extends Resource
     {
         return $table
             ->columns([
+                Tables\Columns\ImageColumn::make('photo')
+                    ->label('Foto')
+                    ->circular()
+                    ->size(40)
+                    ->getStateUsing(fn ($record) => $record->photo_url),
                 Tables\Columns\TextColumn::make('name')
-                    ->searchable(),
+                    ->label('Nama')
+                    ->searchable()
+                    ->weight('bold'),
+                Tables\Columns\TextColumn::make('username')
+                    ->label('Username')
+                    ->searchable()
+                    ->copyable(),
+                Tables\Columns\TextColumn::make('phone')
+                    ->label('Telepon')
+                    ->searchable()
+                    ->copyable(),
                 Tables\Columns\TextColumn::make('role.name')
-                    ->label('Role'),
+                    ->label('Role')
+                    ->badge()
+                    ->color('primary'),
                 Tables\Columns\TextColumn::make('userScopes.badan_usaha_id')
                     ->label('Badan Usaha')
                     ->getStateUsing(function ($record) {
@@ -283,15 +310,18 @@ class UserResource extends Resource
                     ->label('TM')
                     ->searchable(),
                 Tables\Columns\TextColumn::make('created_at')
-                    ->dateTime()
+                    ->label('Dibuat')
+                    ->dateTime('M j, Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('updated_at')
-                    ->dateTime()
+                    ->label('Diperbarui')
+                    ->dateTime('M j, Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('name', 'asc')
+            ->striped()
             ->deferLoading()
             ->filters([
                 TrashedFilter::make(),
