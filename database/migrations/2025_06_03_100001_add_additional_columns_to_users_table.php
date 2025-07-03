@@ -13,10 +13,10 @@ return new class extends Migration
     {
         Schema::table('users', function (Blueprint $table) {
             $table->string('username')->unique()->after('name');
-            $table->string('phone')->nullable()->after('email');
+            $table->string('phone')->unique()->nullable()->after('email');
             $table->string('photo')->nullable()->after('phone');
             // Relasi ke TM (atasan langsung)
-            $table->unsignedBigInteger('tm_id')->nullable()->after('phone');
+            $table->unsignedBigInteger('tm_id')->nullable()->after('photo');
             $table->unsignedBigInteger('role_id')->nullable()->after('tm_id');
             $table->string('notif_id')->nullable()->after('role_id');
 

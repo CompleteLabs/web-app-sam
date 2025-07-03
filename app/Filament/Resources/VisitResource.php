@@ -120,11 +120,45 @@ class VisitResource extends Resource
                             ->schema([
                                 Forms\Components\FileUpload::make('checkin_photo')
                                     ->label('Check-in Photo')
+                                    ->image()
                                     ->required()
-                                    ->visible(fn ($context) => in_array($context, ['edit', 'create'])),
+                                    ->visible(fn ($context) => in_array($context, ['edit', 'create']))
+                                    ->getUploadedFileNameForStorageUsing(function ($file, $livewire) {
+                                        $userId = $livewire->data['user_id'] ?? 'user';
+                                        $username = null;
+                                        if ($userId) {
+                                            $userModel = \App\Models\User::find($userId);
+                                            $username = $userModel?->username ?? 'user';
+                                            $username = \Str::slug($username);
+                                        } else {
+                                            $username = 'user';
+                                        }
+                                        $date = date('Y-m-d');
+                                        $time = date('His');
+                                        $random = substr(bin2hex(random_bytes(4)), 0, 6);
+                                        $extension = $file->getClientOriginalExtension();
+                                        return "visit-checkin_{$username}_{$date}_{$time}_{$random}.{$extension}";
+                                    }),
                                 Forms\Components\FileUpload::make('checkout_photo')
                                     ->label('Check-out Photo')
-                                    ->visible(fn ($context) => in_array($context, ['edit'])),
+                                    ->image()
+                                    ->visible(fn ($context) => in_array($context, ['edit']))
+                                    ->getUploadedFileNameForStorageUsing(function ($file, $livewire) {
+                                        $userId = $livewire->data['user_id'] ?? 'user';
+                                        $username = null;
+                                        if ($userId) {
+                                            $userModel = \App\Models\User::find($userId);
+                                            $username = $userModel?->username ?? 'user';
+                                            $username = \Str::slug($username);
+                                        } else {
+                                            $username = 'user';
+                                        }
+                                        $date = date('Y-m-d');
+                                        $time = date('His');
+                                        $random = substr(bin2hex(random_bytes(4)), 0, 6);
+                                        $extension = $file->getClientOriginalExtension();
+                                        return "visit-checkout_{$username}_{$date}_{$time}_{$random}.{$extension}";
+                                    }),
                             ])
                             ->collapsible(),
                         Forms\Components\Section::make('Visit Result')

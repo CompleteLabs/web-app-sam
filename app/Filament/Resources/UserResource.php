@@ -36,28 +36,47 @@ class UserResource extends Resource
                                 Forms\Components\TextInput::make('name')
                                     ->required()
                                     ->maxLength(255)
-                                    ->dehydrateStateUsing(fn ($state) => strtoupper($state))
+                                    ->dehydrateStateUsing(fn($state) => strtoupper($state))
                                     ->columnSpan('full'),
                                 Forms\Components\TextInput::make('username')
                                     ->required()
                                     ->maxLength(255)
                                     ->regex('/^[\S]+$/', 'Username tidak boleh mengandung spasi')
-                                    ->helperText('Username tidak boleh mengandung spasi'),
+                                    ->helperText('Username tidak boleh mengandung spasi')
+                                    ->dehydrateStateUsing(fn($state) => strtolower($state)),
                                 Forms\Components\TextInput::make('phone')
                                     ->maxLength(20)
                                     ->unique(ignoreRecord: true)
                                     ->tel()
                                     ->required()
-                                    ->helperText('Nomor handphone harus aktif (untuk login menggunakan WhatsApp)'),
+                                    ->helperText('Nomor handphone harus aktif (untuk login menggunakan WhatsApp)')
+                                    ->afterStateHydrated(function ($state, callable $set) {
+                                        $set('phone', \App\Services\PhoneService::normalize($state));
+                                    })
+                                    ->dehydrateStateUsing(fn($state) => \App\Services\PhoneService::normalize($state))
+                                    ->rule(function () {
+                                        return function ($attribute, $value, $fail) {
+                                            if (!\App\Services\PhoneService::isValid($value)) {
+                                                $fail('Format nomor handphone tidak valid. Harus diawali 08 atau +62 dan minimal 10 digit, maksimal 15 digit.');
+                                            }
+                                        };
+                                    }),
                                 Forms\Components\FileUpload::make('photo')
                                     ->label('Foto Profile')
+                                    ->avatar()
                                     ->image()
                                     ->imageEditor()
-                                    ->imageEditorAspectRatios([
-                                        '1:1',
-                                    ])
-                                    ->directory('users/photos')
+                                    ->imageEditorAspectRatios(['1:1'])
+                                    ->maxSize(2048)
                                     ->visibility('public')
+                                    ->getUploadedFileNameForStorageUsing(function ($file, $livewire) {
+                                        $username = strtolower($livewire->data['username'] ?? 'user');
+                                        $date = date('Y-m-d');
+                                        $time = date('His');
+                                        $random = substr(bin2hex(random_bytes(4)), 0, 6);
+                                        $extension = $file->getClientOriginalExtension();
+                                        return "profile_{$username}_{$date}_{$time}_{$random}.{$extension}";
+                                    })
                                     ->columnSpanFull(),
                                 Forms\Components\Select::make('role_id')
                                     ->relationship('role', 'name')
@@ -79,12 +98,12 @@ class UserResource extends Resource
                                     ->placeholder('Pilih TM'),
                                 Forms\Components\TextInput::make('password')
                                     ->password()
-                                    ->dehydrateStateUsing(fn ($state) => Hash::make($state))
-                                    ->dehydrated(fn ($state) => filled($state))
+                                    ->dehydrateStateUsing(fn($state) => Hash::make($state))
+                                    ->dehydrated(fn($state) => filled($state))
                                     ->maxLength(255)
                                     ->label('Password')
                                     ->placeholder('Masukkan password')
-                                    ->required(fn (string $context): bool => $context === 'create')
+                                    ->required(fn(string $context): bool => $context === 'create')
                                     ->revealable()
                                     ->columnSpanFull(),
                             ])
@@ -105,10 +124,10 @@ class UserResource extends Resource
                                     ->searchable()
                                     ->reactive()
                                     ->placeholder('Pilih badan usaha')
-                                    ->options(fn () => \App\Models\BadanUsaha::pluck('name', 'id'))
-                                    ->multiple(fn (callable $get) => ScopeHelper::canBeMultiple('badan_usaha_id', $get('../../role_id')))
-                                    ->required(fn (callable $get) => ScopeHelper::isRequired('badan_usaha_id', $get('../../role_id')))
-                                    ->visible(fn (callable $get) => ScopeHelper::isVisible('badan_usaha_id', $get('../../role_id')))
+                                    ->options(fn() => \App\Models\BadanUsaha::pluck('name', 'id'))
+                                    ->multiple(fn(callable $get) => ScopeHelper::canBeMultiple('badan_usaha_id', $get('../../role_id')))
+                                    ->required(fn(callable $get) => ScopeHelper::isRequired('badan_usaha_id', $get('../../role_id')))
+                                    ->visible(fn(callable $get) => ScopeHelper::isVisible('badan_usaha_id', $get('../../role_id')))
                                     ->helperText(function (callable $get) {
                                         $roleId = $get('../../role_id');
                                         if (! $roleId) {
@@ -137,9 +156,9 @@ class UserResource extends Resource
                                         return Division::whereIn('badan_usaha_id', $badanUsahaIds)
                                             ->pluck('name', 'id');
                                     })
-                                    ->multiple(fn (callable $get) => ScopeHelper::canBeMultiple('division_id', $get('../../role_id')))
-                                    ->required(fn (callable $get) => ScopeHelper::isRequired('division_id', $get('../../role_id')))
-                                    ->visible(fn (callable $get) => ScopeHelper::isVisible('division_id', $get('../../role_id')))
+                                    ->multiple(fn(callable $get) => ScopeHelper::canBeMultiple('division_id', $get('../../role_id')))
+                                    ->required(fn(callable $get) => ScopeHelper::isRequired('division_id', $get('../../role_id')))
+                                    ->visible(fn(callable $get) => ScopeHelper::isVisible('division_id', $get('../../role_id')))
                                     ->helperText(function (callable $get) {
                                         $roleId = $get('../../role_id');
                                         if (! $roleId) {
@@ -172,9 +191,9 @@ class UserResource extends Resource
                                         return Region::whereIn('division_id', $divisionIds)
                                             ->pluck('name', 'id');
                                     })
-                                    ->multiple(fn (callable $get) => ScopeHelper::canBeMultiple('region_id', $get('../../role_id')))
-                                    ->required(fn (callable $get) => ScopeHelper::isRequired('region_id', $get('../../role_id')))
-                                    ->visible(fn (callable $get) => ScopeHelper::isVisible('region_id', $get('../../role_id')))
+                                    ->multiple(fn(callable $get) => ScopeHelper::canBeMultiple('region_id', $get('../../role_id')))
+                                    ->required(fn(callable $get) => ScopeHelper::isRequired('region_id', $get('../../role_id')))
+                                    ->visible(fn(callable $get) => ScopeHelper::isVisible('region_id', $get('../../role_id')))
                                     ->helperText(function (callable $get) {
                                         $roleId = $get('../../role_id');
                                         if (! $roleId) {
@@ -206,9 +225,9 @@ class UserResource extends Resource
                                         return \App\Models\Cluster::whereIn('region_id', $regionIds)
                                             ->pluck('name', 'id');
                                     })
-                                    ->multiple(fn (callable $get) => ScopeHelper::canBeMultiple('cluster_id', $get('../../role_id')))
-                                    ->required(fn (callable $get) => ScopeHelper::isRequired('cluster_id', $get('../../role_id')))
-                                    ->visible(fn (callable $get) => ScopeHelper::isVisible('cluster_id', $get('../../role_id')))
+                                    ->multiple(fn(callable $get) => ScopeHelper::canBeMultiple('cluster_id', $get('../../role_id')))
+                                    ->required(fn(callable $get) => ScopeHelper::isRequired('cluster_id', $get('../../role_id')))
+                                    ->visible(fn(callable $get) => ScopeHelper::isVisible('cluster_id', $get('../../role_id')))
                                     ->helperText(function (callable $get) {
                                         $roleId = $get('../../role_id');
                                         if (! $roleId) {
@@ -241,7 +260,7 @@ class UserResource extends Resource
                             })
                             ->collapsible()
                             ->collapsed(false)
-                            ->visible(fn (callable $get) => $get('role_id')),
+                            ->visible(fn(callable $get) => $get('role_id')),
                     ])
                     ->columnSpan(['lg' => 1]),
             ])
@@ -256,7 +275,7 @@ class UserResource extends Resource
                     ->label('Foto')
                     ->circular()
                     ->size(40)
-                    ->getStateUsing(fn ($record) => $record->photo_url),
+                    ->getStateUsing(fn($record) => $record->photo_url),
                 Tables\Columns\TextColumn::make('name')
                     ->label('Nama')
                     ->searchable()
@@ -339,7 +358,7 @@ class UserResource extends Resource
                     ->form([
                         Forms\Components\Select::make('badan_usaha_id')
                             ->label('Badan Usaha')
-                            ->options(fn () => \App\Models\BadanUsaha::pluck('name', 'id')->toArray())
+                            ->options(fn() => \App\Models\BadanUsaha::pluck('name', 'id')->toArray())
                             ->searchable()
                             ->reactive(),
                         Forms\Components\Select::make('division_id')

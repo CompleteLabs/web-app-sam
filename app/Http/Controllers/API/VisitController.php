@@ -151,7 +151,7 @@ class VisitController extends Controller
             }
 
             // 4. Handle photo upload
-            $imageName = FileUploadService::uploadPhoto($validated['checkin_photo'], 'checkin');
+            $imageName = FileUploadService::uploadPhoto($validated['checkin_photo'], 'visit-checkin');
 
             // 5. Create visit
             $visit = Visit::create([
@@ -245,7 +245,7 @@ class VisitController extends Controller
             $duration = $checkinTime->diffInMinutes($checkoutTime);
 
             // 6. Handle photo upload
-            $imageName = FileUploadService::uploadPhoto($validated['checkout_photo'], 'checkout');
+            $imageName = FileUploadService::uploadPhoto($validated['checkout_photo'], 'visit-checkout');
 
             // 7. Update visit
             $visit->update([

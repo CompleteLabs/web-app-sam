@@ -158,11 +158,21 @@ class OutletController extends Controller
 
             $validated = $validator->validated();
 
+            // Additional phone validation using PhoneService
+            if (!PhoneService::isValid($validated['owner_phone'])) {
+                DB::rollBack();
+                return ResponseFormatter::error(
+                    null,
+                    'Format nomor handphone pemilik tidak valid. Pastikan nomor dimulai dengan 08 atau +62 dan memiliki 10-13 digit.',
+                    422
+                );
+            }
+
             // 2. Normalize phone using service
             $validated['owner_phone'] = PhoneService::normalize($validated['owner_phone']);
 
             // 3. Handle file uploads
-            $uploadedFiles = $this->handleFileUploads($request, 'store');
+            $uploadedFiles = $this->handleFileUploads($request, 'outlet');
 
             // 4. Prepare outlet data
             $outletData = [
@@ -258,13 +268,23 @@ class OutletController extends Controller
 
             $validated = $validator->validated();
 
+            // Additional phone validation using PhoneService
+            if (!PhoneService::isValid($validated['owner_phone'])) {
+                DB::rollBack();
+                return ResponseFormatter::error(
+                    null,
+                    'Format nomor handphone pemilik tidak valid. Pastikan nomor dimulai dengan 08 atau +62 dan memiliki 10-13 digit.',
+                    422
+                );
+            }
+
             // 3. Normalize phone using service
             if (isset($validated['owner_phone'])) {
                 $validated['owner_phone'] = PhoneService::normalize($validated['owner_phone']);
             }
 
             // 4. Handle file uploads if any
-            $uploadedFiles = $this->handleFileUploads($request, 'update');
+            $uploadedFiles = $this->handleFileUploads($request, 'outlet');
 
             // 4.1. Delete old files if new ones are uploaded
             foreach ($uploadedFiles as $field => $newFileName) {
@@ -320,7 +340,7 @@ class OutletController extends Controller
     /**
      * Helper method - Handle file uploads
      */
-    private function handleFileUploads(Request $request, $action = 'store')
+    private function handleFileUploads(Request $request, $action = 'outlet')
     {
         $uploadedFiles = [];
 

@@ -88,29 +88,88 @@ class OutletResource extends Resource
                                 Forms\Components\TextInput::make('owner_phone')
                                     ->maxLength(255)
                                     ->reactive()
-                                    ->visible(fn($get) => $get('level') !== null),
+                                    ->visible(fn($get) => $get('level') !== null)
+                                    ->afterStateHydrated(function ($state, callable $set) {
+                                        $set('owner_phone', \App\Services\PhoneService::normalize($state));
+                                    })
+                                    ->dehydrateStateUsing(fn ($state) => \App\Services\PhoneService::normalize($state))
+                                    ->rule(function () {
+                                        return function ($attribute, $value, $fail) {
+                                            if (!\App\Services\PhoneService::isValid($value)) {
+                                                $fail('Format nomor handphone tidak valid. Harus diawali 08 atau +62 dan minimal 10 digit, maksimal 15 digit.');
+                                            }
+                                        };
+                                    }),
                             ])
                             ->columns(2),
                         Forms\Components\Section::make('Foto & Video')
                             ->schema([
                                 Forms\Components\FileUpload::make('photo_shop_sign')
                                     ->reactive()
-                                    ->visible(fn($get) => $get('level') !== null),
+                                    ->visible(fn($get) => $get('level') !== null)
+                                    ->getUploadedFileNameForStorageUsing(function ($file, $livewire) {
+                                        $username = strtolower($livewire->data['owner_name'] ?? 'outlet');
+                                        $date = date('Y-m-d');
+                                        $time = date('His');
+                                        $random = substr(bin2hex(random_bytes(4)), 0, 6);
+                                        $extension = $file->getClientOriginalExtension();
+                                        return "outlet-photo_shop_sign_{$username}_{$date}_{$time}_{$random}.{$extension}";
+                                    }),
                                 Forms\Components\FileUpload::make('photo_front')
                                     ->reactive()
-                                    ->visible(fn($get) => $get('level') !== null),
+                                    ->visible(fn($get) => $get('level') !== null)
+                                    ->getUploadedFileNameForStorageUsing(function ($file, $livewire) {
+                                        $username = strtolower($livewire->data['owner_name'] ?? 'outlet');
+                                        $date = date('Y-m-d');
+                                        $time = date('His');
+                                        $random = substr(bin2hex(random_bytes(4)), 0, 6);
+                                        $extension = $file->getClientOriginalExtension();
+                                        return "outlet-photo_front_{$username}_{$date}_{$time}_{$random}.{$extension}";
+                                    }),
                                 Forms\Components\FileUpload::make('photo_left')
                                     ->reactive()
-                                    ->visible(fn($get) => $get('level') !== null),
+                                    ->visible(fn($get) => $get('level') !== null)
+                                    ->getUploadedFileNameForStorageUsing(function ($file, $livewire) {
+                                        $username = strtolower($livewire->data['owner_name'] ?? 'outlet');
+                                        $date = date('Y-m-d');
+                                        $time = date('His');
+                                        $random = substr(bin2hex(random_bytes(4)), 0, 6);
+                                        $extension = $file->getClientOriginalExtension();
+                                        return "outlet-photo_left_{$username}_{$date}_{$time}_{$random}.{$extension}";
+                                    }),
                                 Forms\Components\FileUpload::make('photo_right')
                                     ->reactive()
-                                    ->visible(fn($get) => $get('level') !== null),
+                                    ->visible(fn($get) => $get('level') !== null)
+                                    ->getUploadedFileNameForStorageUsing(function ($file, $livewire) {
+                                        $username = strtolower($livewire->data['owner_name'] ?? 'outlet');
+                                        $date = date('Y-m-d');
+                                        $time = date('His');
+                                        $random = substr(bin2hex(random_bytes(4)), 0, 6);
+                                        $extension = $file->getClientOriginalExtension();
+                                        return "outlet-photo_right_{$username}_{$date}_{$time}_{$random}.{$extension}";
+                                    }),
                                 Forms\Components\FileUpload::make('photo_id_card')
                                     ->reactive()
-                                    ->visible(fn($get) => $get('level') !== null && ($get('level') === 'MEMBER' || $get('level') === 'NOO')),
+                                    ->visible(fn($get) => $get('level') !== null && ($get('level') === 'MEMBER' || $get('level') === 'NOO'))
+                                    ->getUploadedFileNameForStorageUsing(function ($file, $livewire) {
+                                        $username = strtolower($livewire->data['owner_name'] ?? 'outlet');
+                                        $date = date('Y-m-d');
+                                        $time = date('His');
+                                        $random = substr(bin2hex(random_bytes(4)), 0, 6);
+                                        $extension = $file->getClientOriginalExtension();
+                                        return "outlet-photo_idcard_{$username}_{$date}_{$time}_{$random}.{$extension}";
+                                    }),
                                 Forms\Components\FileUpload::make('video')
                                     ->reactive()
-                                    ->visible(fn($get) => $get('level') !== null),
+                                    ->visible(fn($get) => $get('level') !== null)
+                                    ->getUploadedFileNameForStorageUsing(function ($file, $livewire) {
+                                        $username = strtolower($livewire->data['owner_name'] ?? 'outlet');
+                                        $date = date('Y-m-d');
+                                        $time = date('His');
+                                        $random = substr(bin2hex(random_bytes(4)), 0, 6);
+                                        $extension = $file->getClientOriginalExtension();
+                                        return "outlet-video_{$username}_{$date}_{$time}_{$random}.{$extension}";
+                                    }),
                             ])
                             ->columns(2),
                         CustomFieldsComponent::make()

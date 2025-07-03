@@ -36,8 +36,8 @@ class PhoneService
     {
         $normalizedPhone = self::normalize($phone);
 
-        // Indonesian phone numbers should start with 628 and have 10-13 digits total
-        return preg_match('/^628\d{8,10}$/', $normalizedPhone);
+        // Indonesian phone numbers should start with 628 and have 10-15 digits total
+        return preg_match('/^628\d{8,13}$/', $normalizedPhone);
     }
 
     /**

@@ -3,7 +3,7 @@
 return [
     'nav' => [
         'label' => 'Kolom Kustom',
-        'group' => 'Pengaturan Sistem',
+        'group' => 'Settings',
         'icon' => 'heroicon-o-cube',
     ],
 

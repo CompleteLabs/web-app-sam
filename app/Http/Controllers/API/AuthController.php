@@ -56,13 +56,26 @@ class AuthController extends Controller
 
     /**
      * User - Update profile information ✅
-     */
-    public function updateProfile(Request $request)
+     */    public function updateProfile(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'name' => 'sometimes|required|string|max:255',
             'email' => 'sometimes|nullable|email|max:255|unique:users,email,' . Auth::id(),
-            'phone' => 'sometimes|nullable|string|max:20',
+            'phone' => [
+                'sometimes',
+                'nullable',
+                'regex:/^(\\+62|62|0)8[1-9][0-9]{6,10}$/',
+                'unique:users,phone,' . Auth::id(),
+            ],
+        ], [
+            'name.required' => 'Nama lengkap wajib diisi.',
+            'name.string' => 'Nama lengkap harus berupa teks.',
+            'name.max' => 'Nama lengkap maksimal 255 karakter.',
+            'email.email' => 'Format email tidak valid.',
+            'email.max' => 'Email maksimal 255 karakter.',
+            'email.unique' => 'Email sudah digunakan oleh pengguna lain.',
+            'phone.regex' => 'Format nomor handphone tidak valid. Gunakan format 62xxxxxxxxxxx atau 08xxxxxxxxxx.',
+            'phone.unique' => 'Nomor handphone sudah digunakan oleh pengguna lain.',
         ]);
 
         if ($validator->fails()) {
@@ -70,6 +83,17 @@ class AuthController extends Controller
                 $validator->errors(),
                 'Periksa kembali data yang Anda masukkan.'
             );
+        }
+
+        // Additional phone validation using PhoneService
+        if ($request->has('phone') && $request->phone) {
+            if (!PhoneService::isValid($request->phone)) {
+                return ResponseFormatter::error(
+                    null,
+                    'Format nomor handphone tidak valid. Pastikan nomor dimulai dengan 08 atau +62 dan memiliki 10-13 digit.',
+                    422
+                );
+            }
         }
 
         DB::beginTransaction();
@@ -83,13 +107,14 @@ class AuthController extends Controller
 
             // Update only provided fields
             if ($request->has('name')) {
-                $user->name = $request->name;
+                $user->name = strtoupper($request->name); // Store name in uppercase
             }
             if ($request->has('email')) {
                 $user->email = $request->email;
             }
             if ($request->has('phone')) {
-                $user->phone = $request->phone;
+                // Normalize phone number before saving
+                $user->phone = $request->phone ? PhoneService::normalize($request->phone) : null;
             }
 
             $user->save();
@@ -106,7 +131,8 @@ class AuthController extends Controller
             Log::info('Profile updated successfully', [
                 'user_id' => $user->id,
                 'old_data' => $oldData,
-                'updated_fields' => array_keys($request->only(['name', 'email', 'phone']))
+                'updated_fields' => array_keys($request->only(['name', 'email', 'phone'])),
+                'normalized_phone' => $request->has('phone') && $request->phone ? PhoneService::normalize($request->phone) : null
             ]);
 
             return ResponseFormatter::success(
@@ -275,7 +301,7 @@ class AuthController extends Controller
             // Update password
             $user->password = Hash::make($request->new_password);
             $user->save();
-            
+
             DB::commit();
 
             // Reload user with relationships
@@ -358,8 +384,8 @@ class AuthController extends Controller
                             $userData = $data['data']['user'];
                             // Simpan user ke database lokal
                             $user = new \App\Models\User;
-                            $user->username = $userData['username'] ?? $request->username;
-                            $user->name = $userData['nama_lengkap'] ?? $request->name;
+                            $user->username = strtolower($userData['username'] ?? $request->username); // Store username in lowercase
+                            $user->name = strtoupper($userData['nama_lengkap'] ?? $request->name); // Store name in uppercase
                             $user->email = $userData['email'] ?? null;
                             $user->password = bcrypt($request->password);
 
