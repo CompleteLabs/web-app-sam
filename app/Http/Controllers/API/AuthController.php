@@ -8,6 +8,7 @@ use App\Http\Resources\UserResource;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\UserScope;
+use App\Services\FileUploadService;
 use App\Services\OtpService;
 use App\Services\PhoneService;
 use Carbon\Carbon;
@@ -16,6 +17,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
@@ -34,12 +36,272 @@ class AuthController extends Controller
                 ->where('id', Auth::user()->id)
                 ->first();
 
+            Log::info('Profile fetched successfully', [
+                'user_id' => $user->id,
+                'username' => $user->username
+            ]);
+
             return ResponseFormatter::success(
                 UserResource::make($user),
                 'Data profil pengguna berhasil diambil'
             );
         } catch (Exception $error) {
+            Log::error('Error fetching profile: ' . $error->getMessage(), [
+                'user_id' => Auth::id(),
+                'error' => $error->getMessage()
+            ]);
             return ResponseFormatter::error(null, 'Gagal mengambil profil', 500);
+        }
+    }
+
+    /**
+     * User - Update profile information ✅
+     */
+    public function updateProfile(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'name' => 'sometimes|required|string|max:255',
+            'email' => 'sometimes|nullable|email|max:255|unique:users,email,' . Auth::id(),
+            'phone' => 'sometimes|nullable|string|max:20',
+        ]);
+
+        if ($validator->fails()) {
+            return ResponseFormatter::validation(
+                $validator->errors(),
+                'Periksa kembali data yang Anda masukkan.'
+            );
+        }
+
+        DB::beginTransaction();
+        try {
+            $user = Auth::user();
+            $oldData = [
+                'name' => $user->name,
+                'email' => $user->email,
+                'phone' => $user->phone
+            ];
+
+            // Update only provided fields
+            if ($request->has('name')) {
+                $user->name = $request->name;
+            }
+            if ($request->has('email')) {
+                $user->email = $request->email;
+            }
+            if ($request->has('phone')) {
+                $user->phone = $request->phone;
+            }
+
+            $user->save();
+            DB::commit();
+
+            // Reload user with relationships
+            $updatedUser = User::with([
+                'role:'.implode(',', Role::LIST_COLUMNS),
+                'userScopes:'.implode(',', UserScope::LIST_COLUMNS),
+            ])
+                ->where('id', $user->id)
+                ->first();
+
+            Log::info('Profile updated successfully', [
+                'user_id' => $user->id,
+                'old_data' => $oldData,
+                'updated_fields' => array_keys($request->only(['name', 'email', 'phone']))
+            ]);
+
+            return ResponseFormatter::success(
+                UserResource::make($updatedUser),
+                'Profil berhasil diperbarui'
+            );
+        } catch (Exception $error) {
+            DB::rollBack();
+            Log::error('Error updating profile: ' . $error->getMessage(), [
+                'user_id' => Auth::id(),
+                'request_data' => $request->only(['name', 'email', 'phone']),
+                'error' => $error->getMessage()
+            ]);
+            return ResponseFormatter::error(null, 'Gagal memperbarui profil', 500);
+        }
+    }
+
+    /**
+     * User - Update profile photo ✅
+     */
+    public function updatePhoto(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'photo' => 'required|file|mimes:jpg,jpeg,png|max:5120', // Max 5MB
+        ]);
+
+        if ($validator->fails()) {
+            return ResponseFormatter::validation(
+                $validator->errors(),
+                'File foto tidak valid. Pastikan file berformat JPG, JPEG, atau PNG dan berukuran maksimal 5MB.'
+            );
+        }
+
+        DB::beginTransaction();
+        try {
+            $user = Auth::user();
+            $photo = $request->file('photo');
+            $oldPhoto = $user->photo;
+
+            // Validate file type and size using FileUploadService
+            if (!FileUploadService::isValidPhoto($photo)) {
+                return ResponseFormatter::error(
+                    null,
+                    'Format foto tidak didukung. Gunakan format JPG, JPEG, atau PNG.',
+                    422
+                );
+            }
+
+            if (!FileUploadService::isValidPhotoSize($photo)) {
+                return ResponseFormatter::error(
+                    null,
+                    'Ukuran foto terlalu besar. Maksimal 5MB.',
+                    422
+                );
+            }
+
+            // Upload new photo first
+            $fileName = FileUploadService::uploadPhoto($photo, 'profile', $user->username);
+
+            // Update user photo in database
+            $user->photo = $fileName;
+            $user->save();
+
+            DB::commit();
+
+            // Delete old photo after successful database update
+            if ($oldPhoto) {
+                try {
+                    $deleted = FileUploadService::deleteFile($oldPhoto);
+                    if ($deleted) {
+                        Log::info('Old profile photo deleted successfully', [
+                            'user_id' => $user->id,
+                            'old_photo' => $oldPhoto
+                        ]);
+                    } else {
+                        Log::warning('Failed to delete old profile photo', [
+                            'user_id' => $user->id,
+                            'old_photo' => $oldPhoto
+                        ]);
+                    }
+                } catch (Exception $e) {
+                    Log::warning('Error deleting old profile photo', [
+                        'user_id' => $user->id,
+                        'old_photo' => $oldPhoto,
+                        'error' => $e->getMessage()
+                    ]);
+                    // Continue since the new photo is already uploaded and database updated
+                }
+            }
+
+            // Reload user with relationships
+            $updatedUser = User::with([
+                'role:'.implode(',', Role::LIST_COLUMNS),
+                'userScopes:'.implode(',', UserScope::LIST_COLUMNS),
+            ])
+                ->where('id', $user->id)
+                ->first();
+
+            Log::info('Profile photo updated successfully', [
+                'user_id' => $user->id,
+                'old_photo' => $oldPhoto,
+                'new_photo' => $fileName
+            ]);
+
+            return ResponseFormatter::success(
+                UserResource::make($updatedUser),
+                'Foto profil berhasil diperbarui'
+            );
+        } catch (Exception $error) {
+            DB::rollBack();
+            Log::error('Error updating profile photo: ' . $error->getMessage(), [
+                'user_id' => Auth::id(),
+                'error' => $error->getMessage()
+            ]);
+            return ResponseFormatter::error(null, 'Gagal memperbarui foto profil', 500);
+        }
+    }
+
+    /**
+     * User - Update password ✅
+     */
+    public function updatePassword(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'current_password' => 'required|string',
+            'new_password' => 'required|string|min:8|confirmed',
+            'new_password_confirmation' => 'required|string|min:8',
+        ], [
+            'current_password.required' => 'Password saat ini wajib diisi.',
+            'new_password.required' => 'Password baru wajib diisi.',
+            'new_password.min' => 'Password baru minimal 8 karakter.',
+            'new_password.confirmed' => 'Konfirmasi password baru tidak cocok.',
+            'new_password_confirmation.required' => 'Konfirmasi password baru wajib diisi.',
+            'new_password_confirmation.min' => 'Konfirmasi password baru minimal 8 karakter.',
+        ]);
+
+        if ($validator->fails()) {
+            return ResponseFormatter::validation(
+                $validator->errors(),
+                'Periksa kembali data yang Anda masukkan.'
+            );
+        }
+
+        DB::beginTransaction();
+        try {
+            $user = Auth::user();
+
+            // Verify current password
+            if (!Hash::check($request->current_password, $user->password)) {
+                return ResponseFormatter::error(
+                    null,
+                    'Password saat ini tidak benar.',
+                    422
+                );
+            }
+
+            // Check if new password is different from current
+            if (Hash::check($request->new_password, $user->password)) {
+                return ResponseFormatter::error(
+                    null,
+                    'Password baru harus berbeda dengan password saat ini.',
+                    422
+                );
+            }
+
+            // Update password
+            $user->password = Hash::make($request->new_password);
+            $user->save();
+            
+            DB::commit();
+
+            // Reload user with relationships
+            $updatedUser = User::with([
+                'role:'.implode(',', Role::LIST_COLUMNS),
+                'userScopes:'.implode(',', UserScope::LIST_COLUMNS),
+            ])
+                ->where('id', $user->id)
+                ->first();
+
+            Log::info('Password updated successfully', [
+                'user_id' => $user->id,
+                'username' => $user->username
+            ]);
+
+            return ResponseFormatter::success(
+                UserResource::make($updatedUser),
+                'Password berhasil diperbarui'
+            );
+        } catch (Exception $error) {
+            DB::rollBack();
+            Log::error('Error updating password: ' . $error->getMessage(), [
+                'user_id' => Auth::id(),
+                'error' => $error->getMessage()
+            ]);
+            return ResponseFormatter::error(null, 'Gagal memperbarui password', 500);
         }
     }
 

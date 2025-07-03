@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\API\AuthController;
+use App\Http\Controllers\API\NotificationController;
 use App\Http\Controllers\API\OutletController;
 use App\Http\Controllers\API\OutletHistoryController;
 use App\Http\Controllers\API\PlanVisitController;
@@ -16,6 +17,9 @@ Route::post('verify-otp', [AuthController::class, 'verifyOtp']);
 Route::middleware('auth:sanctum')->group(function () {
     // USER
     Route::get('profile', [AuthController::class, 'profile']);
+    Route::post('profile/update', [AuthController::class, 'updateProfile']);
+    Route::post('profile/photo', [AuthController::class, 'updatePhoto']);
+    Route::post('profile/password', [AuthController::class, 'updatePassword']);
     Route::post('logout', [AuthController::class, 'logout']);
 
     // OUTLET
@@ -46,6 +50,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('plan-visits/{id}', [PlanVisitController::class, 'destroy']);
 
     Route::apiResource('user', UserController::class);
+
+    // NOTIFICATIONS
+    Route::get('notifications', [NotificationController::class, 'index']);
+    Route::get('notifications/unread-count', [NotificationController::class, 'unreadCount']);
+    Route::get('notifications/{id}', [NotificationController::class, 'show']);
+    Route::post('notifications/{id}/read', [NotificationController::class, 'markAsRead']);
+    Route::post('notifications/mark-all-read', [NotificationController::class, 'markAllAsRead']);
+    Route::delete('notifications/{id}', [NotificationController::class, 'delete']);
+    Route::delete('notifications/read', [NotificationController::class, 'deleteAllRead']);
 
     Route::get('references/badan-usaha', [ReferenceController::class, 'badanUsaha']);
     Route::get('references/division', [ReferenceController::class, 'division']);

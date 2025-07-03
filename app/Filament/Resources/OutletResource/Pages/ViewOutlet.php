@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\OutletResource\Pages;
 
 use App\Filament\Resources\OutletResource;
+use App\Services\NotificationService;
 use Filament\Actions;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Notifications\Notification;
@@ -69,23 +70,38 @@ class ViewOutlet extends ViewRecord
                 )
                 ->action(function ($record, $data) {
                     $oldLevel = $record->level;
+
+                    // Find the original requester from the last history entry
+                    $lastHistory = $record->outletHistories()
+                        ->where('approval_status', 'PENDING')
+                        ->orWhere('approval_status', null)
+                        ->latest()
+                        ->first();
+
+                    $requestedById = $lastHistory ? $lastHistory->requested_by : Auth::id();
+
                     $record->update([
                         'code' => $data['code'],
                         'limit' => $data['limit'],
                         'level' => 'MEMBER',
                     ]);
+
                     // Tambah ke outlet_histories
-                    \App\Models\OutletHistory::create([
+                    $history = \App\Models\OutletHistory::create([
                         'outlet_id' => $record->id,
                         'from_level' => $oldLevel,
                         'to_level' => 'MEMBER',
-                        'requested_by' => Auth::id(),
+                        'requested_by' => $requestedById,
                         'approved_by' => Auth::id(),
                         'approval_status' => 'APPROVED',
-                        'requested_at' => now(),
+                        'requested_at' => $lastHistory ? $lastHistory->requested_at : now(),
                         'approved_at' => now(),
                         'approval_notes' => null,
                     ]);
+
+                    // Send notification to the user who requested the approval
+                    NotificationService::sendOutletApproval($record, $data['code'], $data['limit']);
+
                     Notification::make()
                         ->title($record->name . ' Approved')
                         ->success()
@@ -111,24 +127,39 @@ class ViewOutlet extends ViewRecord
                 )
                 ->action(function ($record, $data) {
                     $oldLevel = $record->level;
+
+                    // Find the original requester from the last history entry
+                    $lastHistory = $record->outletHistories()
+                        ->where('approval_status', 'PENDING')
+                        ->orWhere('approval_status', null)
+                        ->latest()
+                        ->first();
+
+                    $requestedById = $lastHistory ? $lastHistory->requested_by : Auth::id();
+
                     $record->update([
                         // 'confirmed_at' => Carbon::now(),
                         // 'confirmed_by' => auth()->user()->name,
                         // Tidak update status ke REJECTED karena enum status outlet tidak mengizinkan
                         'status' => 'UNPRODUCTIVE',
                     ]);
+
                     // Tambah ke outlet_histories
-                    \App\Models\OutletHistory::create([
+                    $history = \App\Models\OutletHistory::create([
                         'outlet_id' => $record->id,
                         'from_level' => $oldLevel,
                         'to_level' => $oldLevel,
-                        'requested_by' => Auth::id(),
+                        'requested_by' => $requestedById,
                         'approved_by' => Auth::id(),
                         'approval_status' => 'REJECTED',
-                        'requested_at' => now(),
+                        'requested_at' => $lastHistory ? $lastHistory->requested_at : now(),
                         'approved_at' => now(),
-                        'approval_notes' => null,
+                        'approval_notes' => $data['alasan'] ?? null,
                     ]);
+
+                    // Send notification to the user who requested the approval
+                    NotificationService::sendOutletRejection($record, $data['alasan'] ?? null);
+
                     Notification::make()
                         ->title($record->name . ' Rejected')
                         ->danger()
