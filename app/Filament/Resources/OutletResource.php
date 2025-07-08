@@ -89,9 +89,6 @@ class OutletResource extends Resource
                                     ->maxLength(255)
                                     ->reactive()
                                     ->visible(fn($get) => $get('level') !== null)
-                                    ->afterStateHydrated(function ($state, callable $set) {
-                                        $set('owner_phone', \App\Services\PhoneService::normalize($state));
-                                    })
                                     ->dehydrateStateUsing(fn ($state) => \App\Services\PhoneService::normalize($state))
                                     ->rule(function () {
                                         return function ($attribute, $value, $fail) {

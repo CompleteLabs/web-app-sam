@@ -33,34 +33,6 @@ class UserResource extends Resource
                     ->schema([
                         Forms\Components\Section::make('Informasi Pengguna')
                             ->schema([
-                                Forms\Components\TextInput::make('name')
-                                    ->required()
-                                    ->maxLength(255)
-                                    ->dehydrateStateUsing(fn($state) => strtoupper($state))
-                                    ->columnSpan('full'),
-                                Forms\Components\TextInput::make('username')
-                                    ->required()
-                                    ->maxLength(255)
-                                    ->regex('/^[\S]+$/', 'Username tidak boleh mengandung spasi')
-                                    ->helperText('Username tidak boleh mengandung spasi')
-                                    ->dehydrateStateUsing(fn($state) => strtolower($state)),
-                                Forms\Components\TextInput::make('phone')
-                                    ->maxLength(20)
-                                    ->unique(ignoreRecord: true)
-                                    ->tel()
-                                    ->required()
-                                    ->helperText('Nomor handphone harus aktif (untuk login menggunakan WhatsApp)')
-                                    ->afterStateHydrated(function ($state, callable $set) {
-                                        $set('phone', \App\Services\PhoneService::normalize($state));
-                                    })
-                                    ->dehydrateStateUsing(fn($state) => \App\Services\PhoneService::normalize($state))
-                                    ->rule(function () {
-                                        return function ($attribute, $value, $fail) {
-                                            if (!\App\Services\PhoneService::isValid($value)) {
-                                                $fail('Format nomor handphone tidak valid. Harus diawali 08 atau +62 dan minimal 10 digit, maksimal 15 digit.');
-                                            }
-                                        };
-                                    }),
                                 Forms\Components\FileUpload::make('photo')
                                     ->label('Foto Profile')
                                     ->avatar()
@@ -78,6 +50,31 @@ class UserResource extends Resource
                                         return "profile_{$username}_{$date}_{$time}_{$random}.{$extension}";
                                     })
                                     ->columnSpanFull(),
+                                Forms\Components\TextInput::make('name')
+                                    ->required()
+                                    ->maxLength(255)
+                                    ->dehydrateStateUsing(fn($state) => strtoupper($state))
+                                    ->columnSpan('full'),
+                                Forms\Components\TextInput::make('username')
+                                    ->required()
+                                    ->maxLength(255)
+                                    ->regex('/^[\S]+$/', 'Username tidak boleh mengandung spasi')
+                                    ->helperText('Username tidak boleh mengandung spasi')
+                                    ->dehydrateStateUsing(fn($state) => strtolower($state)),
+                                Forms\Components\TextInput::make('phone')
+                                    ->maxLength(20)
+                                    ->unique(ignoreRecord: true)
+                                    ->tel()
+                                    ->required()
+                                    ->helperText('Nomor handphone harus aktif (untuk login menggunakan WhatsApp)')
+                                    ->dehydrateStateUsing(fn($state) => \App\Services\PhoneService::normalize($state))
+                                    ->rule(function () {
+                                        return function ($attribute, $value, $fail) {
+                                            if (!\App\Services\PhoneService::isValid($value)) {
+                                                $fail('Format nomor handphone tidak valid. Harus diawali 08 atau +62 dan minimal 10 digit, maksimal 15 digit.');
+                                            }
+                                        };
+                                    }),
                                 Forms\Components\Select::make('role_id')
                                     ->relationship('role', 'name')
                                     ->searchable()
