@@ -134,24 +134,4 @@ class UserScope extends Model
     {
         return $this->belongsTo(User::class);
     }
-
-    public function badanUsaha()
-    {
-        return $this->belongsTo(BadanUsaha::class);
-    }
-
-    public function division()
-    {
-        return $this->belongsTo(Division::class);
-    }
-
-    public function region()
-    {
-        return $this->belongsTo(Region::class);
-    }
-
-    public function cluster()
-    {
-        return $this->belongsTo(Cluster::class);
-    }
 }

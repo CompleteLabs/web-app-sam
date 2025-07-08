@@ -20,6 +20,9 @@ return new class extends Migration
             $table->json('scope_required_fields')->nullable();
             $table->json('scope_multiple_fields')->nullable();
             $table->timestamps();
+
+            // Add foreign key constraint for parent_id
+            $table->foreign('parent_id')->references('id')->on('roles')->onDelete('set null');
         });
     }
 

@@ -111,6 +111,24 @@ class User extends Authenticatable implements FilamentUser
         return $this->belongsTo(User::class, 'tm_id');
     }
 
+    // Add relationship for subordinates (users who report to this user)
+    public function subordinates()
+    {
+        return $this->hasMany(User::class, 'tm_id');
+    }
+
+    // Add relationship for outlet histories where user requested changes
+    public function requestedOutletHistories()
+    {
+        return $this->hasMany(OutletHistory::class, 'requested_by');
+    }
+
+    // Add relationship for outlet histories where user approved changes
+    public function approvedOutletHistories()
+    {
+        return $this->hasMany(OutletHistory::class, 'approved_by');
+    }
+
     public function userScopes()
     {
         return $this->hasMany(UserScope::class);
@@ -119,6 +137,37 @@ class User extends Authenticatable implements FilamentUser
     public function role()
     {
         return $this->belongsTo(Role::class);
+    }
+
+    // Add relationship to organizational entities (through user scopes)
+    public function badanUsahas()
+    {
+        return $this->hasManyThrough(
+            BadanUsaha::class,
+            UserScope::class,
+            'user_id',
+            'id',
+            'id',
+            'badan_usaha_id'
+        );
+    }
+
+    /**
+     * Get user's organizational scope using the UserScope relation
+     */
+    public function getOrganizationalScope()
+    {
+        $scope = $this->userScopes->first();
+        if (!$scope) {
+            return null;
+        }
+
+        return [
+            'badan_usaha' => $scope->badan_usaha_list,
+            'division' => $scope->division_list,
+            'region' => $scope->region_list,
+            'cluster' => $scope->cluster_list,
+        ];
     }
 
     /**

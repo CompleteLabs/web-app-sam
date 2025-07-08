@@ -71,8 +71,38 @@ class Outlet extends Model implements HasCustomFields
         ]);
     }
 
+public function badanUsaha()
+    {
+        return $this->belongsTo(BadanUsaha::class);
+    }
+
+    public function division()
+    {
+        return $this->belongsTo(Division::class);
+    }
+
+    public function region()
+    {
+        return $this->belongsTo(Region::class);
+    }
+
+    public function cluster()
+    {
+        return $this->belongsTo(Cluster::class);
+    }
+
+    public function planVisits()
+    {
+        return $this->hasMany(PlanVisit::class);
+    }
+
+    public function visits()
+    {
+        return $this->hasMany(Visit::class);
+    }
+
     public function outletHistories()
     {
-        return $this->hasMany(\App\Models\OutletHistory::class, 'outlet_id');
+        return $this->hasMany(OutletHistory::class);
     }
 }

@@ -11,6 +11,7 @@
     "require": {
         "php": "^8.2",
         "apriansyahrs/custom-fields": "dev-main",
+        "apriansyahrs/import-excel": "dev-main",
         "filament/filament": "^3.3",
         "guava/filament-icon-picker": "^2.0",
         "laravel/framework": "^12.0",
@@ -88,6 +89,10 @@
         {
             "type": "vcs",
             "url": "git@github.com:apriansyahrs/custom-fields.git"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/apriansyahrs/import-excel.git"
         }
     ]
 }

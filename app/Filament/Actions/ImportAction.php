@@ -2,10 +2,10 @@
 
 namespace App\Filament\Actions;
 
-use Filament\Actions\ImportAction as BaseImportAction;
+use Apriansyahrs\ImportExcel\Actions\FullImportAction;
 use Illuminate\Support\Facades\Auth;
 
-class ImportAction extends BaseImportAction
+class ImportAction extends FullImportAction
 {
     public function isVisible(): bool
     {

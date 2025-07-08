@@ -6,10 +6,18 @@ use App\Models\Outlet;
 use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
+use Apriansyahrs\ImportExcel\Models\FailedImportRow;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Validation\ValidationException;
+use Exception;
 
 class OutletImporter extends Importer
 {
     protected static ?string $model = Outlet::class;
+
+    // Store the record after it's been processed
+    protected ?Model $record = null;
 
     public static function getColumns(): array
     {
@@ -40,7 +48,7 @@ class OutletImporter extends Importer
                 ->rules(['required', 'max:255']),
             ImportColumn::make('status')
                 ->requiredMapping()
-                ->rules(['required']),
+                ->rules(['required', 'in:MAINTAIN,UNMAINTAIN,UNPRODUCTIVE']),
             ImportColumn::make('radius')
                 ->requiredMapping()
                 ->numeric()
@@ -52,23 +60,25 @@ class OutletImporter extends Importer
             ImportColumn::make('location')
                 ->requiredMapping()
                 ->rules(['required', 'max:255']),
-            // Kolom lain tidak required
+            ImportColumn::make('level')
+                ->rules(['nullable', 'in:LEAD,NOO,MEMBER']),
+            // Optional columns that match model fillable fields
             ImportColumn::make('owner_name')
-                ->rules(['max:255']),
+                ->rules(['nullable', 'max:255']),
             ImportColumn::make('owner_phone')
-                ->rules(['max:255']),
+                ->rules(['nullable', 'max:255']),
             ImportColumn::make('photo_shop_sign')
-                ->rules(['max:255']),
+                ->rules(['nullable', 'max:255']),
             ImportColumn::make('photo_front')
-                ->rules(['max:255']),
+                ->rules(['nullable', 'max:255']),
             ImportColumn::make('photo_left')
-                ->rules(['max:255']),
+                ->rules(['nullable', 'max:255']),
             ImportColumn::make('photo_right')
-                ->rules(['max:255']),
+                ->rules(['nullable', 'max:255']),
             ImportColumn::make('photo_id_card')
-                ->rules(['max:255']),
+                ->rules(['nullable', 'max:255']),
             ImportColumn::make('video')
-                ->rules(['max:255']),
+                ->rules(['nullable', 'max:255']),
         ];
     }
 
@@ -160,12 +170,57 @@ class OutletImporter extends Importer
         }
     }
 
+    /**
+     * Custom import method for Excel functionality with FailedImportRow support
+     * This method is called by the apriansyahrs/import-excel package
+     */
+    public function import(array $data, array $map, array $options = []): void
+    {
+        try {
+            // Store data for processing
+            $this->data = $data;
+
+            // Call the existing beforeFill method to process data
+            $this->beforeFill();
+
+            // Create and save the record
+            $record = $this->resolveRecord();
+            $record->fill($this->data);
+            $record->save();
+
+            // Store the record for afterSave method
+            $this->record = $record;
+
+            // Call afterSave to handle any post-save logic
+            $this->afterSave();
+        } catch (ValidationException $e) {
+            // Re-throw validation exceptions to be caught by the import job
+            throw $e;
+        } catch (Exception $e) {
+            // Log the error and re-throw for the import job to handle
+            Log::error('Error importing outlet: ' . $e->getMessage(), [
+                'data' => $data,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Get the record that was created/updated during import
+     */
+    public function getRecord(): ?Outlet
+    {
+        return $this->record;
+    }
+
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Your outlet import has completed and '.number_format($import->successful_rows).' '.str('row')->plural($import->successful_rows).' imported.';
+        $body = 'Your outlet import has completed and ' . number_format($import->successful_rows) . ' ' . str('row')->plural($import->successful_rows) . ' imported.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' '.number_format($failedRowsCount).' '.str('row')->plural($failedRowsCount).' failed to import.';
+            $body .= ' ' . number_format($failedRowsCount) . ' ' . str('row')->plural($failedRowsCount) . ' failed to import.';
         }
 
         return $body;

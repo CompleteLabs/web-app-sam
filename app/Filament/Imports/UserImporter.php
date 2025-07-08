@@ -12,11 +12,19 @@ use App\Models\UserScope;
 use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
+use Apriansyahrs\ImportExcel\Models\FailedImportRow;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Validation\ValidationException;
+use Exception;
 
 class UserImporter extends Importer
 {
     protected static ?string $model = User::class;
+
+    // Store the record after it's been processed
+    protected ?Model $record = null;
 
     // Store scope data temporarily
     protected array $scopeData = [];
@@ -30,12 +38,20 @@ class UserImporter extends Importer
             ImportColumn::make('username')
                 ->requiredMapping()
                 ->rules(['required', 'max:255']),
+            ImportColumn::make('email')
+                ->rules(['nullable', 'email', 'max:255']),
+            ImportColumn::make('phone')
+                ->rules(['nullable', 'max:255']),
             ImportColumn::make('password')
                 ->requiredMapping()
                 ->rules(['required', 'max:255']),
             ImportColumn::make('role_name')
                 ->label('Role Name')
                 ->rules(['nullable', 'string']),
+            ImportColumn::make('tm_id')
+                ->label('TM ID')
+                ->numeric()
+                ->rules(['nullable', 'integer']),
             ImportColumn::make('badan_usaha_names')
                 ->label('Badan Usaha Names (semicolon separated)')
                 ->rules(['nullable', 'string']),
@@ -89,6 +105,52 @@ class UserImporter extends Importer
             $this->scopeData['cluster_names'] = $this->data['cluster_names'];
             unset($this->data['cluster_names']);
         }
+    }
+
+    /**
+     * Custom import method for Excel functionality with FailedImportRow support
+     * This method is called by the apriansyahrs/import-excel package
+     */
+    public function import(array $data, array $map, array $options = []): void
+    {
+        try {
+            // Store data for processing
+            $this->data = $data;
+
+            // Call the existing beforeFill method to process data
+            $this->beforeFill();
+
+            // Create and save the record
+            $record = $this->resolveRecord();
+            $record->fill($this->data);
+            $record->save();
+
+            // Store the record for afterSave method
+            $this->record = $record;
+
+            // Call afterSave to handle any post-save logic
+            $this->afterSave();
+
+        } catch (ValidationException $e) {
+            // Re-throw validation exceptions to be caught by the import job
+            throw $e;
+        } catch (Exception $e) {
+            // Log the error and re-throw for the import job to handle
+            Log::error('Error importing user: ' . $e->getMessage(), [
+                'data' => $data,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Get the record that was created/updated during import
+     */
+    public function getRecord(): ?User
+    {
+        return $this->record;
     }
 
     public function resolveRecord(): ?User

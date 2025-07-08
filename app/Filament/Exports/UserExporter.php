@@ -29,7 +29,14 @@ class UserExporter extends Exporter
 
                     return ($users[$record->id] ?? 0) + 1;
                 }),
-            ExportColumn::make('name'),
+            ExportColumn::make('name')
+                ->label('Nama'),
+            ExportColumn::make('username')
+                ->label('Username'),
+            ExportColumn::make('email')
+                ->label('Email'),
+            ExportColumn::make('phone')
+                ->label('Telepon'),
             ExportColumn::make('role.name')
                 ->label('Role'),
             ExportColumn::make('userScopes.badan_usaha_id')

@@ -6,6 +6,10 @@ use App\Models\PlanVisit;
 use Filament\Actions\Exports\ExportColumn;
 use Filament\Actions\Exports\Exporter;
 use Filament\Actions\Exports\Models\Export;
+use OpenSpout\Common\Entity\Style\CellAlignment;
+use OpenSpout\Common\Entity\Style\CellVerticalAlignment;
+use OpenSpout\Common\Entity\Style\Style;
+use OpenSpout\Writer\XLSX\Options;
 
 class PlanVisitExporter extends Exporter
 {
@@ -14,13 +18,13 @@ class PlanVisitExporter extends Exporter
     public static function getColumns(): array
     {
         return [
-            ExportColumn::make('id')
-                ->label('ID'),
-            ExportColumn::make('user_id'),
-            ExportColumn::make('outlet_id'),
-            ExportColumn::make('tanggal_visit'),
-            ExportColumn::make('created_at'),
-            ExportColumn::make('updated_at'),
+            ExportColumn::make('user.name')
+                ->label('Nama User'),
+            ExportColumn::make('outlet.name')
+                ->label('Nama Outlet'),
+            ExportColumn::make('visit_date')
+                ->label('Tanggal Visit')
+                ->formatStateUsing(fn ($state) => \Carbon\Carbon::parse($state)->format('d-m-Y')),
         ];
     }
 
@@ -33,5 +37,25 @@ class PlanVisitExporter extends Exporter
         }
 
         return $body;
+    }
+
+    public function getXlsxHeaderCellStyle(): ?Style
+    {
+        return (new Style)
+            ->setFontBold()
+            ->setCellAlignment(CellAlignment::CENTER)
+            ->setCellVerticalAlignment(CellVerticalAlignment::CENTER);
+    }
+
+    public function getXlsxOptions(): Options
+    {
+        $options = new Options;
+
+        // Set column widths for better readability
+        $options->setColumnWidth(25, 1); // Nama User
+        $options->setColumnWidth(30, 2); // Nama Outlet
+        $options->setColumnWidth(15, 3); // Tanggal Visit
+
+        return $options;
     }
 }
