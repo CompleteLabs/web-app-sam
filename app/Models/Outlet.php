@@ -8,10 +8,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Auth;
+use Spatie\Activitylog\Traits\LogsActivity;
+use Spatie\Activitylog\LogOptions;
 
 class Outlet extends Model implements HasCustomFields
 {
-    use HasFactory, SoftDeletes, UsesCustomFields;
+    use HasFactory, SoftDeletes, UsesCustomFields, LogsActivity;
 
     protected $fillable = [
         'code',
@@ -59,39 +61,13 @@ class Outlet extends Model implements HasCustomFields
         'level'
     ];
 
-    // Relationships
-    public function badanUsaha()
+    public function getActivitylogOptions(): LogOptions
     {
-        return $this->belongsTo(BadanUsaha::class);
-    }
-
-    public function division()
-    {
-        return $this->belongsTo(Division::class);
-    }
-
-    public function region()
-    {
-        return $this->belongsTo(Region::class);
-    }
-
-    public function cluster()
-    {
-        return $this->belongsTo(Cluster::class);
-    }
-
-    public function planVisits()
-    {
-        return $this->hasMany(PlanVisit::class);
-    }
-
-    public function visits()
-    {
-        return $this->hasMany(Visit::class);
-    }
-
-    public function outletHistories()
-    {
-        return $this->hasMany(OutletHistory::class);
+        return LogOptions::defaults()
+        ->logOnly([
+            'code', 'name', 'address', 'owner_name', 'owner_phone',
+            'badan_usaha_id', 'division_id', 'region_id', 'cluster_id',
+            'district', 'status', 'level', 'limit', 'radius', 'location'
+        ]);
     }
 }

@@ -3,7 +3,7 @@
 return [
     'nav' => [
         'label' => 'Custom Fields',
-        'group' => 'Settings',
+        'group' => 'System',
         'icon' => 'heroicon-o-cube',
     ],
 

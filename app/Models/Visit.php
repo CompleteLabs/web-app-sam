@@ -5,10 +5,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Spatie\Activitylog\Traits\LogsActivity;
+use Spatie\Activitylog\LogOptions;
 
 class Visit extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, SoftDeletes, LogsActivity;
 
     protected $fillable = [
         'visit_date',
@@ -102,5 +104,16 @@ class Visit extends Model
             $this->duration = $this->checkin_time->diffInMinutes($this->checkout_time);
             $this->save();
         }
+    }
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logOnly([
+                'visit_date', 'user_id', 'outlet_id', 'type',
+                'checkin_location', 'checkout_location',
+                'checkin_time', 'checkout_time',
+                'transaction', 'report', 'duration'
+            ]);
     }
 }

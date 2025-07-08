@@ -23,6 +23,7 @@ use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use Rmsramos\Activitylog\ActivitylogPlugin;
 
 class AdminPanelProvider extends PanelProvider
 {
@@ -74,16 +75,20 @@ class AdminPanelProvider extends PanelProvider
                 Authenticate::class,
             ])
             ->plugins([
-                (new CustomFieldsPlugin)->authorize(fn (): bool => Auth::user()?->role?->name === 'SUPER ADMIN'),
+                (new CustomFieldsPlugin)
+                    ->authorize(fn(): bool => Auth::user()?->role?->name === 'SUPER ADMIN'),
+                ActivitylogPlugin::make()
+                    ->navigationGroup('System')
+                    ->authorize(fn() => Auth::user()?->role?->name === 'SUPER ADMIN'),
             ])
             ->navigationItems([
                 NavigationItem::make('Telescope')
-                    ->url(fn () => url(env('TELESCOPE_PATH', 'telescope')))
+                    ->url(fn() => url(env('TELESCOPE_PATH', 'telescope')))
                     ->icon('heroicon-o-magnifying-glass-circle')
                     ->group('System')
                     ->sort(999)
                     ->openUrlInNewTab()
-                    ->visible(fn (): bool => Auth::check() && Auth::user()?->role?->name === 'SUPER ADMIN'),
+                    ->visible(fn(): bool => Auth::check() && Auth::user()?->role?->name === 'SUPER ADMIN'),
             ]);
     }
 }
