@@ -70,4 +70,9 @@ class Outlet extends Model implements HasCustomFields
             'district', 'status', 'level', 'limit', 'radius', 'location'
         ]);
     }
+
+    public function outletHistories()
+    {
+        return $this->hasMany(\App\Models\OutletHistory::class, 'outlet_id');
+    }
 }
