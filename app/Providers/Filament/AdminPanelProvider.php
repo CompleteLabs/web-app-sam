@@ -8,6 +8,8 @@ use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Filament\Navigation\NavigationGroup;
+use Filament\Navigation\NavigationItem;
 use Filament\Pages;
 use Filament\Panel;
 use Filament\PanelProvider;
@@ -19,10 +21,19 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 class AdminPanelProvider extends PanelProvider
 {
+    /**
+     * Configure the Filament admin panel.
+     *
+     * Features:
+     * - Telescope integration with dynamic path from env
+     * - SUPER ADMIN only access for system tools
+     * - Custom fields plugin with role-based authorization
+     */
     public function panel(Panel $panel): Panel
     {
         return $panel
@@ -63,7 +74,16 @@ class AdminPanelProvider extends PanelProvider
                 Authenticate::class,
             ])
             ->plugins([
-                (new CustomFieldsPlugin)->authorize(fn (): bool => auth()->user()->role->name === 'SUPER ADMIN'),
+                (new CustomFieldsPlugin)->authorize(fn (): bool => Auth::user()?->role?->name === 'SUPER ADMIN'),
+            ])
+            ->navigationItems([
+                NavigationItem::make('Telescope')
+                    ->url(fn () => url(env('TELESCOPE_PATH', 'telescope')))
+                    ->icon('heroicon-o-magnifying-glass-circle')
+                    ->group('System')
+                    ->sort(999)
+                    ->openUrlInNewTab()
+                    ->visible(fn (): bool => Auth::check() && Auth::user()?->role?->name === 'SUPER ADMIN'),
             ]);
     }
 }
