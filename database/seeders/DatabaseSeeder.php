@@ -15,10 +15,10 @@ class DatabaseSeeder extends Seeder
     {
         // Seed the organizational structure in order
         $this->call([
-            BadanUsahaSeeder::class,
-            DivisionSeeder::class,
-            RegionSeeder::class,
-            ClusterSeeder::class,
+            // BadanUsahaSeeder::class,
+            // DivisionSeeder::class,
+            // RegionSeeder::class,
+            // ClusterSeeder::class,
             RoleSeeder::class,
             DynamicPermissionSeeder::class,
             UserSeeder::class,

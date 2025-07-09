@@ -57,4 +57,25 @@ class DivisionPolicy
     {
         return $user->hasPermission('delete_division');
     }
+
+    public function restoreAny(User $user): bool
+    {
+        return $user->hasPermission('restore_any_division');
+    }
+
+    public function restore(User $user, Division $division): bool
+    {
+        return $user->hasPermission('restore_division');
+    }
+
+    public function forceDeleteAny(User $user): bool
+    {
+        return $user->hasPermission('force_delete_any_division');
+    }
+
+    public function forceDelete(User $user, Division $division): bool
+    {
+        return $user->hasPermission('force_delete_division');
+    }
+
 }

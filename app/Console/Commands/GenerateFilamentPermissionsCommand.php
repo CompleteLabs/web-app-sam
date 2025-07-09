@@ -129,7 +129,7 @@ class GenerateFilamentPermissionsCommand extends Command
 
     private function assignToSuperAdmin()
     {
-        $superAdminRole = Role::firstOrCreate(['name' => 'SUPER ADMIN']);
+        $superAdminRole = Role::firstOrCreate(['name' => 'SUPER ADMIN', 'can_access_web' => true, 'can_access_mobile' => true]);
         $allPermissions = Permission::pluck('id')->toArray();
 
         $superAdminRole->permissions()->syncWithoutDetaching($allPermissions);

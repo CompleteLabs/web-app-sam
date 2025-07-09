@@ -4,19 +4,23 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
 
 class Region extends Model
 {
-    use HasFactory, LogsActivity;
+    use HasFactory, LogsActivity, SoftDeletes;
 
     protected $table = 'regions';
 
     protected $fillable = [
+        'id',
         'badan_usaha_id',
         'division_id',
         'name',
+        'created_at',
+        'updated_at',
     ];
 
     public const LIST_COLUMNS = [
@@ -52,6 +56,6 @@ class Region extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-        ->logOnly(['badan_usaha_id', 'division_id', 'name']);
+            ->logOnly(['badan_usaha_id', 'division_id', 'name']);
     }
 }

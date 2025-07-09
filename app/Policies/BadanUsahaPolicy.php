@@ -57,4 +57,25 @@ class BadanUsahaPolicy
     {
         return $user->hasPermission('delete_badan::usaha');
     }
+
+    public function restoreAny(User $user): bool
+    {
+        return $user->hasPermission('restore_any_badan::usaha');
+    }
+
+    public function restore(User $user, BadanUsaha $badanUsaha): bool
+    {
+        return $user->hasPermission('restore_badan::usaha');
+    }
+
+    public function forceDeleteAny(User $user): bool
+    {
+        return $user->hasPermission('force_delete_any_badan::usaha');
+    }
+
+    public function forceDelete(User $user, BadanUsaha $badanUsaha): bool
+    {
+        return $user->hasPermission('force_delete_badan::usaha');
+    }
+
 }

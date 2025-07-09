@@ -57,4 +57,25 @@ class RegionPolicy
     {
         return $user->hasPermission('delete_region');
     }
+
+    public function restoreAny(User $user): bool
+    {
+        return $user->hasPermission('restore_any_region');
+    }
+
+    public function restore(User $user, Region $region): bool
+    {
+        return $user->hasPermission('restore_region');
+    }
+
+    public function forceDeleteAny(User $user): bool
+    {
+        return $user->hasPermission('force_delete_any_region');
+    }
+
+    public function forceDelete(User $user, Region $region): bool
+    {
+        return $user->hasPermission('force_delete_region');
+    }
+
 }

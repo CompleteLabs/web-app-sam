@@ -82,7 +82,6 @@ class OutletPolicy
     {
         return $user->hasPermission('export_outlet');
     }
-
     public function import(User $user): bool
     {
         return $user->hasPermission('import_outlet');

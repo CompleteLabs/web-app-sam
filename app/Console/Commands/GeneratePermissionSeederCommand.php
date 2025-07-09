@@ -176,7 +176,7 @@ class DynamicPermissionSeeder extends Seeder
 {$permissionsArray}
         ];
 
-        \$superAdminRole = Role::firstOrCreate(['name' => 'SUPER ADMIN']);
+        \$superAdminRole = Role::firstOrCreate(['name' => 'SUPER ADMIN', 'can_access_web' => true, 'can_access_mobile' => true]);
 
         foreach (\$permissions as \$permission) {
             \$perm = Permission::updateOrCreate(

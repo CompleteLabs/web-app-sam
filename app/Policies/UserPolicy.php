@@ -81,7 +81,6 @@ class UserPolicy
     {
         return $user->hasPermission('export_user');
     }
-
     public function import(User $user): bool
     {
         return $user->hasPermission('import_user');

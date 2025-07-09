@@ -2,8 +2,8 @@
 
 namespace App\Policies;
 
-use App\Models\User;
 use App\Models\Visit;
+use App\Models\User;
 use Illuminate\Auth\Access\HandlesAuthorization;
 
 class VisitPolicy
@@ -82,7 +82,6 @@ class VisitPolicy
     {
         return $user->hasPermission('export_visit');
     }
-
     public function import(User $user): bool
     {
         return $user->hasPermission('import_visit');

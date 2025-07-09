@@ -58,11 +58,11 @@ class PlanVisitPolicy
         return $user->hasPermission('delete_plan::visit');
     }
 
+
     public function export(User $user): bool
     {
         return $user->hasPermission('export_plan::visit');
     }
-
     public function import(User $user): bool
     {
         return $user->hasPermission('import_plan::visit');
