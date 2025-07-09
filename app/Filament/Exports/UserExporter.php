@@ -3,6 +3,7 @@
 namespace App\Filament\Exports;
 
 use App\Models\User;
+use App\Services\ActivityLogService;
 use Filament\Actions\Exports\ExportColumn;
 use Filament\Actions\Exports\Exporter;
 use Filament\Actions\Exports\Models\Export;
@@ -119,6 +120,13 @@ class UserExporter extends Exporter
         if ($failedRowsCount = $export->getFailedRowsCount()) {
             $body .= ' '.number_format($failedRowsCount).' '.str('row')->plural($failedRowsCount).' failed to export.';
         }
+
+        // Log export completion to activity log
+        ActivityLogService::logExportCompleted(
+            'User',
+            $export->successful_rows,
+            $export->file_name ?? 'users_export.xlsx'
+        );
 
         return $body;
     }

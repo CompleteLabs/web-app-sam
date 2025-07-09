@@ -9,6 +9,7 @@ use App\Models\Region;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\UserScope;
+use App\Services\ActivityLogService;
 use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
@@ -324,6 +325,14 @@ class UserImporter extends Importer
         if ($failedRowsCount = $import->getFailedRowsCount()) {
             $body .= ' '.number_format($failedRowsCount).' '.str('row')->plural($failedRowsCount).' failed to import.';
         }
+
+        // Log import completion to activity log
+        ActivityLogService::logImportCompleted(
+            'User',
+            $import->successful_rows,
+            $failedRowsCount,
+            $import->file_name ?? 'users_import.xlsx'
+        );
 
         return $body;
     }
