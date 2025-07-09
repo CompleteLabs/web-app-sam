@@ -12,9 +12,12 @@ class PlanVisit extends Model
     use HasFactory, LogsActivity;
 
     protected $fillable = [
+        'id',
         'user_id',
         'outlet_id',
         'visit_date',
+        'created_at',
+        'updated_at',
     ];
 
     protected $casts = [

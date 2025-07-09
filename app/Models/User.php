@@ -26,6 +26,7 @@ class User extends Authenticatable implements FilamentUser
      * @var list<string>
      */
     protected $fillable = [
+        'id',
         'name',
         'username',
         'email',
@@ -35,6 +36,8 @@ class User extends Authenticatable implements FilamentUser
         'role_id',
         'tm_id',
         'notif_id',
+        'created_at',
+        'updated_at',
     ];
 
     /**

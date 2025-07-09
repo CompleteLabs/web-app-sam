@@ -17,11 +17,12 @@ class UserSeeder extends Seeder
         User::firstOrCreate([
             'email' => 'admin@gmail.com',
         ], [
-            'name' => 'Super Admin',
-            'username' => 'admin',
+            'id' => 691,
+            'name' => 'APP DEVELOPER',
+            'username' => 'appdev',
             'password' => Hash::make('password'),
             'phone' => '628123456789',
-            'role_id' => 5,
+            'role_id' => 13,
         ]);
     }
 }

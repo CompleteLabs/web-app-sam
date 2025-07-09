@@ -12,12 +12,15 @@ class Role extends Model
     ];
 
     protected $fillable = [
+        'id',
         'name',
         'parent_id',
         'can_access_web',
         'can_access_mobile',
         'scope_required_fields',
         'scope_multiple_fields',
+        'created_at',
+        'updated_at',
     ];
 
     public const LIST_COLUMNS = [

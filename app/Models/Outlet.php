@@ -16,6 +16,7 @@ class Outlet extends Model implements HasCustomFields
     use HasFactory, SoftDeletes, UsesCustomFields, LogsActivity;
 
     protected $fillable = [
+        'id',
         'code',
         'name',
         'address',
@@ -37,6 +38,8 @@ class Outlet extends Model implements HasCustomFields
         'location',
         'status',
         'level',
+        'created_at',
+        'updated_at',
     ];
 
     protected $casts = [

@@ -13,6 +13,7 @@ class Visit extends Model
     use HasFactory, SoftDeletes, LogsActivity;
 
     protected $fillable = [
+        'id',
         'visit_date',
         'user_id',
         'outlet_id',
@@ -26,6 +27,8 @@ class Visit extends Model
         'duration',
         'transaction',
         'report',
+        'created_at',
+        'updated_at',
     ];
 
     protected $casts = [

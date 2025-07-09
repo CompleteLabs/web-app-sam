@@ -113,7 +113,7 @@ class DynamicPermissionSeeder extends Seeder
             'import_visit',
         ];
 
-        $superAdminRole = Role::firstOrCreate(['name' => 'SUPER ADMIN', 'can_access_web' => true, 'can_access_mobile' => true]);
+        $superAdminRole = Role::firstOrCreate(['id' => 13,'name' => 'SUPER ADMIN', 'can_access_web' => true, 'can_access_mobile' => true]);
 
         foreach ($permissions as $permission) {
             $perm = Permission::updateOrCreate(
