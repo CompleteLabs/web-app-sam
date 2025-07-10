@@ -57,8 +57,7 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
             ->widgets([
-                // Widgets\AccountWidget::class,
-                // Widgets\FilamentInfoWidget::class,
+                // Dashboard akan menggunakan widgets melalui discoverWidgets
             ])
             ->middleware([
                 EncryptCookies::class,

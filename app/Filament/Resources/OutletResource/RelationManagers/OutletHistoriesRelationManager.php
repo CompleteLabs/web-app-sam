@@ -71,6 +71,6 @@ class OutletHistoriesRelationManager extends RelationManager
                     ->label('Approved By')
                     ->limit(18),
             ])
-            ->defaultSort('requested_at', 'desc');
+            ->defaultSort('id', 'desc');
     }
 }
