@@ -84,10 +84,12 @@ class OutletResource extends Resource
                                 Forms\Components\TextInput::make('owner_name')
                                     ->maxLength(255)
                                     ->reactive()
+                                    ->required()
                                     ->visible(fn($get) => $get('level') !== null),
                                 Forms\Components\TextInput::make('owner_phone')
                                     ->maxLength(255)
                                     ->reactive()
+                                    ->required()
                                     ->visible(fn($get) => $get('level') !== null)
                                     ->dehydrateStateUsing(fn ($state) => \App\Services\PhoneService::normalize($state))
                                     ->rule(function () {

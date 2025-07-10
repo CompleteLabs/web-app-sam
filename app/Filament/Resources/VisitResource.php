@@ -75,6 +75,7 @@ class VisitResource extends Resource
                             ->schema([
                                 Forms\Components\TextInput::make('checkin_location')
                                     ->label('Check-in Location')
+                                    ->required()
                                     ->maxLength(255),
                                 Forms\Components\TextInput::make('checkout_location')
                                     ->label('Check-out Location')

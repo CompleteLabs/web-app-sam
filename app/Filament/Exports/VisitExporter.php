@@ -40,9 +40,11 @@ class VisitExporter extends Exporter
             ExportColumn::make('type')
                 ->label('Tipe Visit'),
             ExportColumn::make('checkin_photo')
-                ->label('Foto Check In'),
+                ->label('Foto Check In')
+                ->formatStateUsing(fn($state) => $state ? config('app.url') . '/storage/' . $state : null),
             ExportColumn::make('checkout_photo')
-                ->label('Foto Check Out'),
+                ->label('Foto Check Out')
+                ->formatStateUsing(fn($state) => $state ? config('app.url') . '/storage/' . $state : null),
             ExportColumn::make('checkin_location')
                 ->label('Lokasi Check In'),
             ExportColumn::make('checkout_location')

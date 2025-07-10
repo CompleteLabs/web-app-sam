@@ -19,17 +19,6 @@ class UserExporter extends Exporter
     public static function getColumns(): array
     {
         return [
-            ExportColumn::make('no')
-                ->label('No')
-                ->getStateUsing(function ($record) {
-                    static $users = null;
-                    if ($users === null) {
-                        $users = User::orderBy('id')->pluck('id')->toArray();
-                        $users = array_flip($users);
-                    }
-
-                    return ($users[$record->id] ?? 0) + 1;
-                }),
             ExportColumn::make('name')
                 ->label('Nama'),
             ExportColumn::make('username')
@@ -143,14 +132,13 @@ class UserExporter extends Exporter
     {
         $options = new Options;
 
-        $options->setColumnWidth(4, 1);
-        $options->setColumnWidth(34, 2);
-        $options->setColumnWidth(13, 3);
+        $options->setColumnWidth(34, 1);
+        $options->setColumnWidth(13, 2);
+        $options->setColumnWidth(30, 3);
         $options->setColumnWidth(30, 4);
         $options->setColumnWidth(30, 5);
         $options->setColumnWidth(30, 6);
-        $options->setColumnWidth(30, 7);
-        $options->setColumnWidth(34, 8);
+        $options->setColumnWidth(34, 7);
 
         return $options;
     }

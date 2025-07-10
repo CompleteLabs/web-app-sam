@@ -40,7 +40,7 @@ class OutletExporter extends Exporter
                 ->label('Level Outlet'),
             ExportColumn::make('radius')
                 ->label('Radius')
-                ->getStateUsing(fn ($record) => $record->radius.' m'),
+                ->getStateUsing(fn($record) => $record->radius . ' m'),
             ExportColumn::make('limit')
                 ->label('Limit'),
             ExportColumn::make('location')
@@ -50,17 +50,23 @@ class OutletExporter extends Exporter
             ExportColumn::make('owner_phone')
                 ->label('Nomor Telepon Outlet'),
             ExportColumn::make('photo_shop_sign')
-                ->label('Foto Papan Nama'),
+                ->label('Foto Papan Nama')
+                ->formatStateUsing(fn($state) => $state ? config('app.url') . '/storage/' . $state : null),
             ExportColumn::make('photo_front')
-                ->label('Foto Depan'),
+                ->label('Foto Depan')
+                ->formatStateUsing(fn($state) => $state ? config('app.url') . '/storage/' . $state : null),
             ExportColumn::make('photo_left')
-                ->label('Foto Kiri'),
+                ->label('Foto Kiri')
+                ->formatStateUsing(fn($state) => $state ? config('app.url') . '/storage/' . $state : null),
             ExportColumn::make('photo_right')
-                ->label('Foto Kanan'),
-            ExportColumn::make('photo_id_card')
-                ->label('Foto KTP'),
+                ->label('Foto Kanan')
+                ->formatStateUsing(fn($state) => $state ? config('app.url') . '/storage/' . $state : null),
+            // ExportColumn::make('photo_id_card')
+            //     ->label('Foto KTP')
+            //     ->formatStateUsing(fn($state) => $state ? config('app.url') . '/storage/' . $state : null),
             ExportColumn::make('video')
-                ->label('Video'),
+                ->label('Video')
+                ->formatStateUsing(fn($state) => $state ? config('app.url') . '/storage/' . $state : null),
             ExportColumn::make('created_at'),
             ExportColumn::make('updated_at'),
         ];
@@ -68,10 +74,10 @@ class OutletExporter extends Exporter
 
     public static function getCompletedNotificationBody(Export $export): string
     {
-        $body = 'Your outlet export has completed and '.number_format($export->successful_rows).' '.str('row')->plural($export->successful_rows).' exported.';
+        $body = 'Your outlet export has completed and ' . number_format($export->successful_rows) . ' ' . str('row')->plural($export->successful_rows) . ' exported.';
 
         if ($failedRowsCount = $export->getFailedRowsCount()) {
-            $body .= ' '.number_format($failedRowsCount).' '.str('row')->plural($failedRowsCount).' failed to export.';
+            $body .= ' ' . number_format($failedRowsCount) . ' ' . str('row')->plural($failedRowsCount) . ' failed to export.';
         }
 
         return $body;
