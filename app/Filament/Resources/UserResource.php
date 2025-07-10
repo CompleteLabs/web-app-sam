@@ -58,6 +58,7 @@ class UserResource extends Resource
                                 Forms\Components\TextInput::make('username')
                                     ->required()
                                     ->maxLength(255)
+                                    ->unique(ignoreRecord: true)
                                     ->regex('/^[\S]+$/', 'Username tidak boleh mengandung spasi')
                                     ->helperText('Username tidak boleh mengandung spasi')
                                     ->dehydrateStateUsing(fn($state) => strtolower($state)),
