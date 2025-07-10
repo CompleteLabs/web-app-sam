@@ -6,6 +6,8 @@ use Filament\Support\Facades\FilamentView;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\ServiceProvider;
+use App\Console\Commands\SyncDataCommand;
+use App\Console\Commands\QueueWorkerOptimizedCommand;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -22,6 +24,14 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Register commands
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                SyncDataCommand::class,
+                QueueWorkerOptimizedCommand::class,
+            ]);
+        }
+
         FilamentView::registerRenderHook(
             PanelsRenderHook::SIDEBAR_FOOTER,
             fn () => view('sidebar-nav-end')

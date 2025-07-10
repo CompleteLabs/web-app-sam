@@ -18,156 +18,93 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 
-class SyncDataJob implements ShouldQueue
+class SyncDataBatchJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     protected string $entityType;
+    protected array $batchData;
+    protected int $batchNumber;
+    protected int $totalBatches;
     protected $userId;
-    protected int $batchSize;
+    protected string $syncId;
 
-    public $timeout = 1800; // 30 minutes
+    public $timeout = 600; // 10 minutes per batch
     public $tries = 3;
     public $maxExceptions = 3;
 
-    public function __construct(string $entityType, $userId = null, int $batchSize = 100)
-    {
+    public function __construct(
+        string $entityType,
+        array $batchData,
+        int $batchNumber,
+        int $totalBatches,
+        string $syncId,
+        $userId = null
+    ) {
         $this->entityType = $entityType;
+        $this->batchData = $batchData;
+        $this->batchNumber = $batchNumber;
+        $this->totalBatches = $totalBatches;
+        $this->syncId = $syncId;
         $this->userId = $userId;
-        $this->batchSize = $batchSize;
     }
 
     public function handle(): void
     {
         try {
-            Log::info("Starting sync for {$this->entityType}");
-
-            $apiUrls = [
-                'users' => 'https://grosir.mediaselularindonesia.com/api/sync/user',
-                'outlets' => 'https://grosir.mediaselularindonesia.com/api/sync/outlet',
-                'visits' => 'https://grosir.mediaselularindonesia.com/api/sync/visit',
-                'planvisits' => 'https://grosir.mediaselularindonesia.com/api/sync/planvisit',
-                'roles' => 'https://grosir.mediaselularindonesia.com/api/sync/role',
-                'badanusahas' => 'https://grosir.mediaselularindonesia.com/api/sync/badanusaha',
-                'divisions' => 'https://grosir.mediaselularindonesia.com/api/sync/division',
-                'regions' => 'https://grosir.mediaselularindonesia.com/api/sync/region',
-                'clusters' => 'https://grosir.mediaselularindonesia.com/api/sync/cluster',
-            ];
-
-            if (!isset($apiUrls[$this->entityType])) {
-                throw new \Exception("Unknown entity type: {$this->entityType}");
-            }
-
-            // Set unlimited execution time
-            set_time_limit(0);
-            ignore_user_abort(true);
-
-            // Get data from API
-            $response = Http::timeout(300)->get($apiUrls[$this->entityType]);
-
-            if (!$response->successful()) {
-                throw new \Exception("Failed to fetch {$this->entityType} from API. Status: " . $response->status());
-            }
-
-            $responseData = $response->json();
-
-            // Handle different response structures
-            $data = [];
-            if (isset($responseData['data']) && is_array($responseData['data'])) {
-                $data = $responseData['data'];
-            } elseif (is_array($responseData)) {
-                $data = $responseData;
-            } else {
-                throw new \Exception('Invalid API response format');
-            }
-
-            // Disable foreign key checks
-            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+            Log::info("Processing batch {$this->batchNumber}/{$this->totalBatches} for {$this->entityType} (Sync ID: {$this->syncId})");
 
             $syncedCount = 0;
             $errorCount = 0;
-            $totalData = count($data);
 
-            Log::info("Processing {$totalData} {$this->entityType} records in batches of {$this->batchSize}");
+            // Disable foreign key checks for this connection
+            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
 
-            // Process data in batches
-            $batches = array_chunk($data, $this->batchSize);
-            $batchNumber = 1;
-            $totalBatches = count($batches);            foreach ($batches as $batch) {
-                $memoryUsage = memory_get_usage(true) / 1024 / 1024; // MB
-                Log::info("Processing batch {$batchNumber}/{$totalBatches} for {$this->entityType} (Memory: {$memoryUsage}MB)");
+            DB::beginTransaction();
 
-                DB::beginTransaction();
-
+            foreach ($this->batchData as $itemData) {
                 try {
-                    foreach ($batch as $itemData) {
-                        try {
-                            $this->syncEntity($this->entityType, $itemData);
-                            $syncedCount++;
-                        } catch (\Exception $e) {
-                            $errorCount++;
-                            Log::error("Error syncing {$this->entityType} ID " . ($itemData['id'] ?? 'unknown') . ': ' . $e->getMessage());
-                        }
-                    }
-
-                    DB::commit();
-
-                    // Optional: Add small delay between batches to reduce load
-                    if ($batchNumber < $totalBatches) {
-                        usleep(250000); // 0.25 second delay (increased from 0.1)
-                    }
-
+                    $this->syncEntity($this->entityType, $itemData);
+                    $syncedCount++;
                 } catch (\Exception $e) {
-                    DB::rollback();
-                    Log::error("Error processing batch {$batchNumber} for {$this->entityType}: " . $e->getMessage());
-
-                    // Count all items in failed batch as errors
-                    $errorCount += count($batch);
-                }
-
-                $batchNumber++;
-
-                // Clear memory more frequently for large datasets
-                if ($batchNumber % 5 === 0) {
-                    gc_collect_cycles();
-                    $memoryAfterGC = memory_get_usage(true) / 1024 / 1024; // MB
-                    Log::info("Memory after GC: {$memoryAfterGC}MB");
-                }
-
-                // Memory usage check - if too high, force garbage collection
-                $currentMemory = memory_get_usage(true) / 1024 / 1024;
-                if ($currentMemory > 200) { // 200MB threshold
-                    Log::warning("High memory usage detected: {$currentMemory}MB - forcing cleanup");
-                    gc_collect_cycles();
-                    unset($batch); // Explicitly unset batch data
+                    $errorCount++;
+                    Log::error("Error syncing {$this->entityType} ID " . ($itemData['id'] ?? 'unknown') . ': ' . $e->getMessage());
                 }
             }
 
-            // Re-enable foreign key checks
+            DB::commit();
             DB::statement('SET FOREIGN_KEY_CHECKS=1;');
 
-            // Send notification if user is specified
-            if ($this->userId) {
-                $this->sendNotification($syncedCount, $errorCount, true);
+            // Update batch progress in cache
+            $this->updateBatchProgress($syncedCount, $errorCount);
+
+            Log::info("Batch {$this->batchNumber}/{$this->totalBatches} completed for {$this->entityType}: {$syncedCount} synced, {$errorCount} errors");
+
+            // If this is the last batch, send final notification
+            if ($this->batchNumber === $this->totalBatches) {
+                $this->sendFinalNotification();
             }
 
-            Log::info("{$this->entityType} sync completed: {$syncedCount} synced, {$errorCount} errors");
-
         } catch (\Exception $e) {
-            // Make sure to rollback any pending transaction
             if (DB::transactionLevel() > 0) {
                 DB::rollback();
             }
             DB::statement('SET FOREIGN_KEY_CHECKS=1;');
 
-            Log::error("{$this->entityType} sync failed: " . $e->getMessage());
+            Log::error("Batch {$this->batchNumber} sync failed for {$this->entityType}: " . $e->getMessage());
 
-            if ($this->userId) {
-                $this->sendNotification(0, 0, false, $e->getMessage());
+            // Update batch progress with errors
+            $this->updateBatchProgress(0, count($this->batchData));
+
+            // If this is the last batch or critical error, send notification
+            if ($this->batchNumber === $this->totalBatches || $this->attempts() >= $this->tries) {
+                $this->sendFinalNotification();
             }
+
+            throw $e; // Re-throw to trigger job retry if needed
         }
     }
 
@@ -316,20 +253,71 @@ class SyncDataJob implements ShouldQueue
         }
     }
 
-    private function sendNotification(int $syncedCount, int $errorCount, bool $success, string $errorMessage = ''): void
+    private function updateBatchProgress(int $syncedCount, int $errorCount): void
     {
+        $cacheKey = "sync_progress_{$this->syncId}";
+        $progress = Cache::get($cacheKey, [
+            'completed_batches' => 0,
+            'total_synced' => 0,
+            'total_errors' => 0,
+            'entity_type' => $this->entityType,
+            'total_batches' => $this->totalBatches,
+            'user_id' => $this->userId,
+        ]);
+
+        $progress['completed_batches']++;
+        $progress['total_synced'] += $syncedCount;
+        $progress['total_errors'] += $errorCount;
+
+        Cache::put($cacheKey, $progress, now()->addHours(1));
+    }
+
+    private function sendFinalNotification(): void
+    {
+        if (!$this->userId) {
+            return;
+        }
+
+        $cacheKey = "sync_progress_{$this->syncId}";
+        $progress = Cache::get($cacheKey);
+
+        if (!$progress) {
+            return;
+        }
+
+        $success = $progress['completed_batches'] === $this->totalBatches;
+
         if ($success) {
             Notification::make()
                 ->title("Sync " . ucfirst($this->entityType) . " Completed")
-                ->body("Successfully synced {$syncedCount} " . $this->entityType . ($errorCount > 0 ? " with {$errorCount} errors" : ''))
+                ->body("Successfully synced {$progress['total_synced']} " . $this->entityType .
+                      ($progress['total_errors'] > 0 ? " with {$progress['total_errors']} errors" : '') .
+                      " in {$progress['completed_batches']} batches")
                 ->success()
-                ->sendToDatabase(\App\Models\User::find($this->userId));
+                ->sendToDatabase(User::find($this->userId));
         } else {
             Notification::make()
-                ->title("Sync " . ucfirst($this->entityType) . " Failed")
-                ->body('Error: ' . $errorMessage)
+                ->title("Sync " . ucfirst($this->entityType) . " Partially Failed")
+                ->body("Completed {$progress['completed_batches']}/{$this->totalBatches} batches. " .
+                      "Synced: {$progress['total_synced']}, Errors: {$progress['total_errors']}")
+                ->warning()
+                ->sendToDatabase(User::find($this->userId));
+        }
+
+        // Clean up cache
+        Cache::forget($cacheKey);
+    }
+
+    public function failed(\Throwable $exception): void
+    {
+        Log::error("SyncDataBatchJob failed for batch {$this->batchNumber}: " . $exception->getMessage());
+
+        if ($this->userId) {
+            Notification::make()
+                ->title("Sync Batch Failed")
+                ->body("Batch {$this->batchNumber} for {$this->entityType} failed: " . $exception->getMessage())
                 ->danger()
-                ->sendToDatabase(\App\Models\User::find($this->userId));
+                ->sendToDatabase(User::find($this->userId));
         }
     }
 }
