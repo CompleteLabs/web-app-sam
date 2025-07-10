@@ -79,13 +79,13 @@ class VisitResource extends Resource
                                 Forms\Components\TextInput::make('checkout_location')
                                     ->label('Check-out Location')
                                     ->maxLength(255)
-                                    ->visible(fn ($context) => in_array($context, ['edit'])),
+                                    ->visible(fn($context) => in_array($context, ['edit'])),
                                 Forms\Components\TimePicker::make('checkin_time')
                                     ->label('Check-in Time')
                                     ->required(),
                                 Forms\Components\TimePicker::make('checkout_time')
                                     ->label('Check-out Time')
-                                    ->visible(fn ($context) => in_array($context, ['edit']))
+                                    ->visible(fn($context) => in_array($context, ['edit']))
                                     ->reactive()
                                     ->afterStateUpdated(function ($state, callable $get, callable $set) {
                                         $checkIn = $get('checkin_time');
@@ -100,7 +100,7 @@ class VisitResource extends Resource
                                     ->label('Duration (minutes)')
                                     ->numeric()
                                     ->columnSpanFull()
-                                    ->visible(fn ($context) => in_array($context, ['edit']))
+                                    ->visible(fn($context) => in_array($context, ['edit']))
                                     ->reactive()
                                     ->afterStateUpdated(function ($state, callable $get, callable $set) {
                                         $checkIn = $get('checkin_time');
@@ -122,7 +122,7 @@ class VisitResource extends Resource
                                     ->label('Check-in Photo')
                                     ->image()
                                     ->required()
-                                    ->visible(fn ($context) => in_array($context, ['edit', 'create']))
+                                    ->visible(fn($context) => in_array($context, ['edit', 'create']))
                                     ->getUploadedFileNameForStorageUsing(function ($file, $livewire) {
                                         $userId = $livewire->data['user_id'] ?? 'user';
                                         $username = null;
@@ -142,7 +142,7 @@ class VisitResource extends Resource
                                 Forms\Components\FileUpload::make('checkout_photo')
                                     ->label('Check-out Photo')
                                     ->image()
-                                    ->visible(fn ($context) => in_array($context, ['edit']))
+                                    ->visible(fn($context) => in_array($context, ['edit']))
                                     ->getUploadedFileNameForStorageUsing(function ($file, $livewire) {
                                         $userId = $livewire->data['user_id'] ?? 'user';
                                         $username = null;
@@ -183,7 +183,7 @@ class VisitResource extends Resource
                                     ->label('Visit Report'),
                             ])
                             ->collapsible()
-                            ->visible(fn ($context) => in_array($context, ['edit'])),
+                            ->visible(fn($context) => in_array($context, ['edit'])),
                     ])
                     ->columnSpan(['lg' => 1]),
             ])
@@ -214,12 +214,12 @@ class VisitResource extends Resource
                 Tables\Columns\TextColumn::make('type')
                     ->label('Visit Type')
                     ->badge()
-                    ->color(fn (string $state): string => match ($state) {
+                    ->color(fn(string $state): string => match ($state) {
                         'PLANNED' => 'primary',
                         'EXTRACALL' => 'info',
                         default => 'gray',
                     })
-                    ->icon(fn (string $state): string => match ($state) {
+                    ->icon(fn(string $state): string => match ($state) {
                         'PLANNED' => 'heroicon-o-calendar',
                         'EXTRACALL' => 'heroicon-o-bolt',
                         default => 'heroicon-o-question-mark-circle',
@@ -232,18 +232,18 @@ class VisitResource extends Resource
                     ->time('H:i'),
                 Tables\Columns\TextColumn::make('duration')
                     ->label('Duration')
-                    ->formatStateUsing(fn ($state) => $state ? $state . ' min' : 'N/A')
+                    ->formatStateUsing(fn($state) => $state ? $state . ' min' : 'N/A')
                     ->sortable()
                     ->toggleable(),
                 Tables\Columns\TextColumn::make('transaction')
                     ->label('Transaction')
                     ->badge()
-                    ->color(fn (string $state): string => match ($state) {
+                    ->color(fn(string $state): string => match ($state) {
                         'YES' => 'success',
                         'NO' => 'danger',
                         default => 'gray',
                     })
-                    ->icon(fn (string $state): string => match ($state) {
+                    ->icon(fn(string $state): string => match ($state) {
                         'YES' => 'heroicon-o-check-circle',
                         'NO' => 'heroicon-o-x-circle',
                         default => 'heroicon-o-question-mark-circle',
@@ -302,6 +302,39 @@ class VisitResource extends Resource
             ->striped()
             ->filters([
                 TrashedFilter::make(),
+                Tables\Filters\SelectFilter::make('user_id')
+                    ->label('Sales Person')
+                    ->relationship('user', 'name')
+                    ->searchable()
+                    ->preload(),
+                Tables\Filters\Filter::make('visit_date')
+                    ->form([
+                        Forms\Components\DatePicker::make('from')
+                            ->label('Dari Tanggal'),
+                        Forms\Components\DatePicker::make('until')
+                            ->label('Sampai Tanggal'),
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        return $query
+                            ->when(
+                                $data['from'],
+                                fn(Builder $query, $date): Builder => $query->whereDate('visit_date', '>=', $date),
+                            )
+                            ->when(
+                                $data['until'],
+                                fn(Builder $query, $date): Builder => $query->whereDate('visit_date', '<=', $date),
+                            );
+                    })
+                    ->indicateUsing(function (array $data): array {
+                        $indicators = [];
+                        if ($data['from'] ?? null) {
+                            $indicators['from'] = 'Dari: ' . \Carbon\Carbon::parse($data['from'])->toFormattedDateString();
+                        }
+                        if ($data['until'] ?? null) {
+                            $indicators['until'] = 'Sampai: ' . \Carbon\Carbon::parse($data['until'])->toFormattedDateString();
+                        }
+                        return $indicators;
+                    }),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),

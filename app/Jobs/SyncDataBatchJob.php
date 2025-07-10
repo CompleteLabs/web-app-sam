@@ -11,6 +11,7 @@ use App\Models\BadanUsaha;
 use App\Models\Division;
 use App\Models\Region;
 use App\Models\Cluster;
+use App\Models\UserScope;
 use Filament\Notifications\Notification;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -112,7 +113,7 @@ class SyncDataBatchJob implements ShouldQueue
     {
         switch ($entityType) {
             case 'users':
-                User::updateOrCreate(
+                $user = User::updateOrCreate(
                     ['id' => $data['id']],
                     [
                         'name' => $data['nama_lengkap'] ?? null,
@@ -124,6 +125,9 @@ class SyncDataBatchJob implements ShouldQueue
                         'updated_at' => isset($data['updated_at']) ? \Carbon\Carbon::parse($data['updated_at']) : now(),
                     ]
                 );
+
+                // Handle user scope after user creation/update
+                $this->handleUserScope($user, $data);
                 break;
 
             case 'outlets':
@@ -319,5 +323,157 @@ class SyncDataBatchJob implements ShouldQueue
                 ->danger()
                 ->sendToDatabase(User::find($this->userId));
         }
+    }
+
+    /**
+     * Handle user scope creation from API data
+     */
+    private function handleUserScope(User $user, array $data): void
+    {
+        // Get user's role to check scope requirements
+        $role = $user->role;
+        if (!$role) {
+            Log::warning("User {$user->id} has no role, skipping scope creation");
+            return;
+        }
+
+        // Get scope required fields from role
+        $scopeFields = [];
+        if ($role->scope_required_fields) {
+            $scopeFields = is_array($role->scope_required_fields)
+                ? $role->scope_required_fields
+                : json_decode($role->scope_required_fields, true);
+        }
+
+        if (empty($scopeFields)) {
+            Log::info("Role {$role->name} has no scope requirements, skipping scope creation for user {$user->id}");
+            return;
+        }
+
+        // Build scope data based on API response
+        $scopeData = [];
+
+        // Handle BadanUsaha
+        if (in_array('badan_usaha_id', $scopeFields)) {
+            $badanUsahaId = $this->getScopeIdFromApiData($data, 'badanusaha', BadanUsaha::class);
+            if ($badanUsahaId) {
+                $scopeData['badan_usaha_id'] = [$badanUsahaId];
+            }
+        }
+
+        // Handle Division
+        if (in_array('division_id', $scopeFields)) {
+            $divisionId = $this->getScopeIdFromApiData($data, 'divisi', Division::class, [
+                'badan_usaha_id' => $scopeData['badan_usaha_id'][0] ?? null
+            ]);
+            if ($divisionId) {
+                $scopeData['division_id'] = [$divisionId];
+            }
+        }
+
+        // Handle Region
+        if (in_array('region_id', $scopeFields)) {
+            $regionId = $this->getScopeIdFromApiData($data, 'region', Region::class, [
+                'badan_usaha_id' => $scopeData['badan_usaha_id'][0] ?? null,
+                'division_id' => $scopeData['division_id'][0] ?? null
+            ]);
+            if ($regionId) {
+                $scopeData['region_id'] = [$regionId];
+            }
+        }
+
+        // Handle Cluster (special handling for cluster_id and cluster_id2)
+        if (in_array('cluster_id', $scopeFields)) {
+            $clusterIds = $this->getClusterIdsFromApiData($data, [
+                'badan_usaha_id' => $scopeData['badan_usaha_id'][0] ?? null,
+                'division_id' => $scopeData['division_id'][0] ?? null,
+                'region_id' => $scopeData['region_id'][0] ?? null
+            ]);
+            if (!empty($clusterIds)) {
+                $scopeData['cluster_id'] = $clusterIds;
+            }
+        }
+
+        // Only create UserScope if we have scope data
+        if (!empty($scopeData)) {
+            // Delete existing user scopes for this user
+            UserScope::where('user_id', $user->id)->delete();
+
+            // Create new user scope
+            $scopeData['user_id'] = $user->id;
+            UserScope::create($scopeData);
+
+            Log::info("Created user scope for user {$user->id}", $scopeData);
+        } else {
+            Log::warning("No valid scope data found for user {$user->id}");
+        }
+    }
+
+    /**
+     * Get scope ID from API data based on name lookup
+     */
+    private function getScopeIdFromApiData(array $data, string $apiKey, string $modelClass, array $filters = []): ?int
+    {
+        // Check if API data has the required key with name
+        if (!isset($data[$apiKey]['name']) || empty($data[$apiKey]['name'])) {
+            return null;
+        }
+
+        $name = $data[$apiKey]['name'];
+        $query = $modelClass::where('name', $name);
+
+        // Apply hierarchical filters
+        foreach ($filters as $field => $value) {
+            if ($value !== null) {
+                $query->where($field, $value);
+            }
+        }
+
+        $entity = $query->first();
+        return $entity ? $entity->id : null;
+    }
+
+    /**
+     * Get cluster IDs from API data (handling cluster_id and cluster_id2)
+     */
+    private function getClusterIdsFromApiData(array $data, array $filters = []): array
+    {
+        $clusterIds = [];
+
+        // Handle cluster_id
+        if (isset($data['cluster_id']) && !empty($data['cluster_id'])) {
+            $clusterId = $this->validateClusterId($data['cluster_id'], $filters);
+            if ($clusterId) {
+                $clusterIds[] = $clusterId;
+            }
+        }
+
+        // Handle cluster_id2 (only add if different from cluster_id)
+        if (isset($data['cluster_id2']) && !empty($data['cluster_id2'])) {
+            $clusterId2 = $this->validateClusterId($data['cluster_id2'], $filters);
+            if ($clusterId2 && !in_array($clusterId2, $clusterIds)) {
+                $clusterIds[] = $clusterId2;
+            }
+        }
+
+        return array_unique($clusterIds);
+    }
+
+    /**
+     * Validate cluster ID against hierarchical filters
+     */
+    private function validateClusterId(int $clusterId, array $filters = []): ?int
+    {
+        $query = Cluster::where('id', $clusterId);
+
+        // Apply hierarchical filters
+        foreach ($filters as $field => $value) {
+            if ($value !== null) {
+                $query->where($field, $value);
+            }
+        }
+
+        $cluster = $query->first();
+        return $cluster ? $cluster->id : null;
     }
 }

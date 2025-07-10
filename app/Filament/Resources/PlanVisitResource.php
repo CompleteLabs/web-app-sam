@@ -178,13 +178,6 @@ class PlanVisitResource extends Resource
                         }
                         return $indicators;
                     }),
-                Tables\Filters\SelectFilter::make('outlet.level')
-                    ->label('Level Outlet')
-                    ->options([
-                        'LEAD' => 'LEAD',
-                        'NOO' => 'NOO',
-                        'MEMBER' => 'MEMBER',
-                    ]),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
