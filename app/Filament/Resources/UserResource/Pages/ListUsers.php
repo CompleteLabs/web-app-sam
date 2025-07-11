@@ -7,7 +7,7 @@ use App\Filament\Actions\ImportAction;
 use App\Filament\Exports\UserExporter;
 use App\Filament\Imports\UserImporter;
 use App\Filament\Resources\UserResource;
-use App\Jobs\SyncDataJob;
+use App\Jobs\SyncDataDispatcherJob;
 use App\Models\User;
 use Filament\Actions;
 use Filament\Notifications\Notification;
@@ -34,7 +34,7 @@ class ListUsers extends ListRecords
                 ->modalDescription('Sinkronisasi data users dari API. Proses akan dijalankan di background menggunakan queue.')
                 ->action(function () {
                     // Dispatch job to queue
-                    SyncDataJob::dispatch('users', Auth::id());
+                    SyncDataDispatcherJob::dispatch('users', Auth::id());
 
                     Notification::make()
                         ->title('Sync Users Started')

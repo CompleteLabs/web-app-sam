@@ -18,14 +18,23 @@ class SyncDataDispatcherJob implements ShouldQueue
     protected string $entityType;
     protected $userId;
     protected int $batchSize;
+    protected ?int $month;
+    protected ?int $year;
 
     public $timeout = 600; // 10 minutes for initial data fetch
 
-    public function __construct(string $entityType, $userId = null, int $batchSize = 100)
-    {
+    public function __construct(
+        string $entityType,
+        $userId = null,
+        int $batchSize = 100,
+        ?int $month = null,
+        ?int $year = null
+    ) {
         $this->entityType = $entityType;
         $this->userId = $userId;
         $this->batchSize = $batchSize;
+        $this->month = $month;
+        $this->year = $year;
     }
 
     public function handle(): void
@@ -33,41 +42,8 @@ class SyncDataDispatcherJob implements ShouldQueue
         try {
             Log::info("Starting sync dispatcher for {$this->entityType} with batch size {$this->batchSize}");
 
-            $apiUrls = [
-                'users' => 'https://grosir.mediaselularindonesia.com/api/sync/user',
-                'outlets' => 'https://grosir.mediaselularindonesia.com/api/sync/outlet',
-                'visits' => 'https://grosir.mediaselularindonesia.com/api/sync/visit',
-                'planvisits' => 'https://grosir.mediaselularindonesia.com/api/sync/planvisit',
-                'roles' => 'https://grosir.mediaselularindonesia.com/api/sync/role',
-                'badanusahas' => 'https://grosir.mediaselularindonesia.com/api/sync/badanusaha',
-                'divisions' => 'https://grosir.mediaselularindonesia.com/api/sync/division',
-                'regions' => 'https://grosir.mediaselularindonesia.com/api/sync/region',
-                'clusters' => 'https://grosir.mediaselularindonesia.com/api/sync/cluster',
-            ];
-
-            if (!isset($apiUrls[$this->entityType])) {
-                throw new \Exception("Unknown entity type: {$this->entityType}");
-            }
-
-            // Get data from API
-            Log::info("Fetching {$this->entityType} data from API...");
-            $response = Http::timeout(300)->get($apiUrls[$this->entityType]);
-
-            if (!$response->successful()) {
-                throw new \Exception("Failed to fetch {$this->entityType} from API. Status: " . $response->status());
-            }
-
-            $responseData = $response->json();
-
-            // Handle different response structures
-            $data = [];
-            if (isset($responseData['data']) && is_array($responseData['data'])) {
-                $data = $responseData['data'];
-            } elseif (is_array($responseData)) {
-                $data = $responseData;
-            } else {
-                throw new \Exception('Invalid API response format');
-            }
+            // Fetch data from API
+            $data = $this->fetchDataFromApi();
 
             $totalRecords = count($data);
             Log::info("Fetched {$totalRecords} {$this->entityType} records");
@@ -115,6 +91,60 @@ class SyncDataDispatcherJob implements ShouldQueue
 
             throw $e;
         }
+    }
+
+    private function fetchDataFromApi(): array
+    {
+        $apiUrls = config('sync.api_urls', []);
+
+        if (!isset($apiUrls[$this->entityType])) {
+            throw new \Exception("Unknown entity type: {$this->entityType}");
+        }
+
+        $url = $apiUrls[$this->entityType];
+
+        // Add query parameters for visits API
+        if ($this->entityType === 'visits') {
+            $params = [];
+            if ($this->month !== null) {
+                $params['month'] = $this->month;
+            }
+            if ($this->year !== null) {
+                $params['year'] = $this->year;
+            }
+
+            if (!empty($params)) {
+                $url .= '?' . http_build_query($params);
+            }
+        }
+
+        // Get data from API
+        $monthYear = '';
+        if ($this->entityType === 'visits' && ($this->month || $this->year)) {
+            $monthYear = ' for ' . ($this->month ? "month {$this->month}" : 'current month') .
+                        ($this->year ? " year {$this->year}" : ' current year');
+        }
+
+        Log::info("Fetching {$this->entityType} data from API{$monthYear}...");
+        $response = Http::timeout(config('sync.timeout', 300))->get($url);
+
+        if (!$response->successful()) {
+            throw new \Exception("Failed to fetch {$this->entityType} from API. Status: " . $response->status());
+        }
+
+        $responseData = $response->json();
+
+        // Handle different response structures
+        $data = [];
+        if (isset($responseData['data']) && is_array($responseData['data'])) {
+            $data = $responseData['data'];
+        } elseif (is_array($responseData)) {
+            $data = $responseData;
+        } else {
+            throw new \Exception('Invalid API response format');
+        }
+
+        return $data;
     }
 
     public function failed(\Throwable $exception): void

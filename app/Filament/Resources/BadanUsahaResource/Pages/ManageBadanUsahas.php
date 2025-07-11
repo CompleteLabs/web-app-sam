@@ -3,7 +3,7 @@
 namespace App\Filament\Resources\BadanUsahaResource\Pages;
 
 use App\Filament\Resources\BadanUsahaResource;
-use App\Jobs\SyncDataJob;
+use App\Jobs\SyncDataDispatcherJob;
 use Filament\Actions;
 use Filament\Resources\Pages\ManageRecords;
 use Filament\Notifications\Notification;
@@ -27,7 +27,7 @@ class ManageBadanUsahas extends ManageRecords
                 ->color('warning')
                 ->action(function () {
                     // Dispatch sync job to queue
-                    SyncDataJob::dispatch('badanusahas', Auth::id());
+                    SyncDataDispatcherJob::dispatch('badanusahas', Auth::id());
 
                     Notification::make()
                         ->title('Sync Started')

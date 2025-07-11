@@ -3,7 +3,7 @@
 namespace App\Filament\Resources\ClusterResource\Pages;
 
 use App\Filament\Resources\ClusterResource;
-use App\Jobs\SyncDataJob;
+use App\Jobs\SyncDataDispatcherJob;
 use Filament\Actions;
 use Filament\Resources\Pages\ManageRecords;
 use Filament\Notifications\Notification;
@@ -27,7 +27,7 @@ class ManageClusters extends ManageRecords
                 ->color('warning')
                 ->action(function () {
                     // Dispatch sync job to queue
-                    SyncDataJob::dispatch('clusters', Auth::id());
+                    SyncDataDispatcherJob::dispatch('clusters', Auth::id());
 
                     Notification::make()
                         ->title('Sync Started')

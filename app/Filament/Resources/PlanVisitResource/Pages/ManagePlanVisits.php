@@ -7,7 +7,7 @@ use App\Filament\Actions\ImportAction;
 use App\Filament\Exports\PlanVisitExporter;
 use App\Filament\Imports\PlanVisitImporter;
 use App\Filament\Resources\PlanVisitResource;
-use App\Jobs\SyncDataJob;
+use App\Jobs\SyncDataDispatcherJob;
 use Filament\Actions;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ManageRecords;
@@ -33,7 +33,7 @@ class ManagePlanVisits extends ManageRecords
                 ->modalDescription('Sinkronisasi data plan visits dari API. Proses akan dijalankan di background menggunakan queue.')
                 ->action(function () {
                     // Dispatch job to queue
-                    SyncDataJob::dispatch('planvisits', Auth::id());
+                    SyncDataDispatcherJob::dispatch('planvisits', Auth::id());
 
                     Notification::make()
                         ->title('Sync Plan Visits Started')

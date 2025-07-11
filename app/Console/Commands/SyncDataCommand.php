@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Jobs\SyncDataJob;
 use App\Jobs\SyncDataDispatcherJob;
 use Illuminate\Console\Command;
 
@@ -13,9 +12,11 @@ class SyncDataCommand extends Command
                           {--batch-size=100 : Number of records per batch}
                           {--use-batch : Use batch processing (recommended for large datasets)}
                           {--user-id= : User ID to send notifications to}
-                          {--delay=5 : Delay in seconds between entity syncs when using "all"}';
+                          {--delay=5 : Delay in seconds between entity syncs when using "all"}
+                          {--month= : Month for visits sync (1-12), defaults to current month}
+                          {--year= : Year for visits sync, defaults to current year}';
 
-    protected $description = 'Sync data from external API with optional batch processing';
+    protected $description = 'Sync data from external API with optional batch processing. For visits, supports month/year parameters.';
 
     public function handle()
     {
@@ -24,6 +25,8 @@ class SyncDataCommand extends Command
         $useBatch = $this->option('use-batch');
         $userId = $this->option('user-id');
         $delay = (int) $this->option('delay');
+        $month = $this->option('month') ? (int) $this->option('month') : null;
+        $year = $this->option('year') ? (int) $this->option('year') : null;
 
         $validEntities = [
             'users', 'outlets', 'visits', 'planvisits', 'roles',
@@ -45,16 +48,31 @@ class SyncDataCommand extends Command
             return self::FAILURE;
         }
 
+        // Validate month and year for visits
+        if (($month !== null || $year !== null) && $entityType !== 'visits' && $entityType !== 'all') {
+            $this->warn("Month and year parameters are only applicable for 'visits' entity type");
+        }
+
+        if ($month !== null && ($month < 1 || $month > 12)) {
+            $this->error("Month must be between 1 and 12");
+            return self::FAILURE;
+        }
+
+        if ($year !== null && ($year < 2020 || $year > 2030)) {
+            $this->error("Year must be between 2020 and 2030");
+            return self::FAILURE;
+        }
+
         // Handle "all" entity type
         if ($entityType === 'all') {
-            return $this->syncAllEntities($batchSize, $useBatch, $userId, $delay);
+            return $this->syncAllEntities($batchSize, $useBatch, $userId, $delay, $month, $year);
         }
 
         // Handle single entity
-        return $this->syncSingleEntity($entityType, $batchSize, $useBatch, $userId);
+        return $this->syncSingleEntity($entityType, $batchSize, $useBatch, $userId, true, $month, $year);
     }
 
-    private function syncAllEntities(int $batchSize, bool $useBatch, $userId, int $delay): int
+    private function syncAllEntities(int $batchSize, bool $useBatch, $userId, int $delay, ?int $month = null, ?int $year = null): int
     {
         // Sync order based on dependencies
         $syncOrder = [
@@ -89,7 +107,7 @@ class SyncDataCommand extends Command
             $startTime = microtime(true);
 
             try {
-                $success = $this->syncSingleEntity($entity, $batchSize, $useBatch, null, false);
+                $success = $this->syncSingleEntity($entity, $batchSize, $useBatch, null, false, $month, $year);
                 $duration = round(microtime(true) - $startTime, 2);
 
                 if ($success === self::SUCCESS) {
@@ -128,10 +146,22 @@ class SyncDataCommand extends Command
         return $allSuccess ? self::SUCCESS : self::FAILURE;
     }
 
-    private function syncSingleEntity(string $entityType, int $batchSize, bool $useBatch, $userId, bool $showMessages = true): int
-    {
+    private function syncSingleEntity(
+        string $entityType,
+        int $batchSize,
+        bool $useBatch,
+        $userId,
+        bool $showMessages = true,
+        ?int $month = null,
+        ?int $year = null
+    ): int {
         if ($showMessages) {
-            $this->info("Starting {$entityType} sync...");
+            $monthYearMsg = '';
+            if ($entityType === 'visits' && ($month || $year)) {
+                $monthYearMsg = " for " . ($month ? "month {$month}" : 'current month') .
+                               ($year ? " year {$year}" : ' current year');
+            }
+            $this->info("Starting {$entityType} sync{$monthYearMsg}...");
         }
 
         try {
@@ -139,12 +169,12 @@ class SyncDataCommand extends Command
                 if ($showMessages) {
                     $this->info("Using batch processing with batch size: {$batchSize}");
                 }
-                SyncDataDispatcherJob::dispatch($entityType, $userId, $batchSize);
+                SyncDataDispatcherJob::dispatch($entityType, $userId, $batchSize, $month, $year);
             } else {
                 if ($showMessages) {
                     $this->info("Using single job processing");
                 }
-                SyncDataJob::dispatch($entityType, $userId, $batchSize);
+                SyncDataDispatcherJob::dispatch($entityType, $userId, $batchSize, $month, $year);
             }
 
             if ($showMessages) {

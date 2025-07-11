@@ -3,7 +3,7 @@
 namespace App\Filament\Resources\RoleResource\Pages;
 
 use App\Filament\Resources\RoleResource;
-use App\Jobs\SyncDataJob;
+use App\Jobs\SyncDataDispatcherJob;
 use Filament\Actions;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
@@ -29,7 +29,7 @@ class ListRoles extends ListRecords
                 ->modalDescription('Sinkronisasi data roles dari API. Proses akan dijalankan di background menggunakan queue.')
                 ->action(function () {
                     // Dispatch job to queue
-                    SyncDataJob::dispatch('roles', Auth::id());
+                    SyncDataDispatcherJob::dispatch('roles', Auth::id());
 
                     Notification::make()
                         ->title('Sync Roles Started')

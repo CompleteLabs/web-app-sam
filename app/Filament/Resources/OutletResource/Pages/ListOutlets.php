@@ -7,7 +7,7 @@ use App\Filament\Actions\ImportAction;
 use App\Filament\Exports\OutletExporter;
 use App\Filament\Imports\OutletImporter;
 use App\Filament\Resources\OutletResource;
-use App\Jobs\SyncDataJob;
+use App\Jobs\SyncDataDispatcherJob;
 use App\Models\Outlet;
 use Apriansyahrs\CustomFields\Filament\Tables\Concerns\InteractsWithCustomFields;
 use Filament\Actions;
@@ -37,7 +37,7 @@ class ListOutlets extends ListRecords
                 ->modalDescription('Sinkronisasi data outlets dari API. Proses akan dijalankan di background menggunakan queue.')
                 ->action(function () {
                     // Dispatch job to queue
-                    SyncDataJob::dispatch('outlets', Auth::id());
+                    SyncDataDispatcherJob::dispatch('outlets', Auth::id());
 
                     Notification::make()
                         ->title('Sync Outlets Started')

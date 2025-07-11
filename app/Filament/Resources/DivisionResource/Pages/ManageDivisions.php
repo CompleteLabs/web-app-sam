@@ -3,7 +3,7 @@
 namespace App\Filament\Resources\DivisionResource\Pages;
 
 use App\Filament\Resources\DivisionResource;
-use App\Jobs\SyncDataJob;
+use App\Jobs\SyncDataDispatcherJob;
 use Filament\Actions;
 use Filament\Resources\Pages\ManageRecords;
 use Filament\Notifications\Notification;
@@ -27,7 +27,7 @@ class ManageDivisions extends ManageRecords
                 ->color('warning')
                 ->action(function () {
                     // Dispatch sync job to queue
-                    SyncDataJob::dispatch('divisions', Auth::id());
+                    SyncDataDispatcherJob::dispatch('divisions', Auth::id());
 
                     Notification::make()
                         ->title('Sync Started')

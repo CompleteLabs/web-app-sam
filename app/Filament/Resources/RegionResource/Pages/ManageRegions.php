@@ -3,7 +3,7 @@
 namespace App\Filament\Resources\RegionResource\Pages;
 
 use App\Filament\Resources\RegionResource;
-use App\Jobs\SyncDataJob;
+use App\Jobs\SyncDataDispatcherJob;
 use Filament\Actions;
 use Filament\Resources\Pages\ManageRecords;
 use Filament\Notifications\Notification;
@@ -27,7 +27,7 @@ class ManageRegions extends ManageRecords
                 ->color('warning')
                 ->action(function () {
                     // Dispatch sync job to queue
-                    SyncDataJob::dispatch('regions', Auth::id());
+                    SyncDataDispatcherJob::dispatch('regions', Auth::id());
 
                     Notification::make()
                         ->title('Sync Started')
