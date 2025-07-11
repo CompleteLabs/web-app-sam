@@ -19,6 +19,7 @@
         "laravel/sanctum": "^4.0",
         "laravel/telescope": "^5.9",
         "laravel/tinker": "^2.10.1",
+        "opcodesio/log-viewer": "^3.18",
         "rmsramos/activitylog": "^1.0",
         "stechstudio/filament-impersonate": "^3.16"
     },

@@ -88,6 +88,13 @@ class AdminPanelProvider extends PanelProvider
                     ->sort(999)
                     ->openUrlInNewTab()
                     ->visible(fn(): bool => Auth::check() && Auth::user()?->role?->name === 'SUPER ADMIN'),
+                NavigationItem::make('Log Viewer')
+                    ->url(fn() => url('log-viewer'))
+                    ->icon('heroicon-o-document-text')
+                    ->group('System')
+                    ->sort(998)
+                    ->openUrlInNewTab()
+                    ->visible(fn(): bool => Auth::check() && Auth::user()?->role?->name === 'SUPER ADMIN'),
             ]);
     }
 }
