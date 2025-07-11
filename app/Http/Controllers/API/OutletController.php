@@ -9,6 +9,7 @@ use App\Models\BadanUsaha;
 use App\Models\Cluster;
 use App\Models\Division;
 use App\Models\Outlet;
+use App\Models\OutletHistory;
 use App\Models\Region;
 use App\Services\FileUploadService;
 use App\Services\PhoneService;
@@ -32,10 +33,10 @@ class OutletController extends Controller
             $sortDirection = $request->input('sort_direction', 'asc');
 
             $query = Outlet::with([
-                'badanUsaha:'.implode(',', BadanUsaha::LIST_COLUMNS),
-                'division:'.implode(',', Division::LIST_COLUMNS),
-                'region:'.implode(',', Region::LIST_COLUMNS),
-                'cluster:'.implode(',', Cluster::LIST_COLUMNS),
+                'badanUsaha:' . implode(',', BadanUsaha::LIST_COLUMNS),
+                'division:' . implode(',', Division::LIST_COLUMNS),
+                'region:' . implode(',', Region::LIST_COLUMNS),
+                'cluster:' . implode(',', Cluster::LIST_COLUMNS),
             ]);
 
             // Scope by user
@@ -94,10 +95,10 @@ class OutletController extends Controller
     {
         try {
             $outlet = Outlet::with([
-                'badanUsaha:'.implode(',', BadanUsaha::LIST_COLUMNS),
-                'division:'.implode(',', Division::LIST_COLUMNS),
-                'region:'.implode(',', Region::LIST_COLUMNS),
-                'cluster:'.implode(',', Cluster::LIST_COLUMNS),
+                'badanUsaha:' . implode(',', BadanUsaha::LIST_COLUMNS),
+                'division:' . implode(',', Division::LIST_COLUMNS),
+                'region:' . implode(',', Region::LIST_COLUMNS),
+                'cluster:' . implode(',', Cluster::LIST_COLUMNS),
             ])
                 ->where('id', $id)
                 ->first();
@@ -119,9 +120,8 @@ class OutletController extends Controller
     {
         DB::beginTransaction();
         try {
-            // 1. Comprehensive validation dengan custom messages
+            // 1. Validasi
             $validator = Validator::make($request->all(), [
-                'code' => 'required|string|max:20|unique:outlets,code',
                 'name' => 'required|string|max:255',
                 'owner_name' => 'required|string|max:255',
                 'owner_phone' => [
@@ -142,7 +142,6 @@ class OutletController extends Controller
                 'photo_id_card' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
                 'video' => 'nullable|mimes:mp4,avi,mov|max:10240',
             ], [
-                'code.unique' => 'Kode outlet sudah digunakan.',
                 'owner_phone.regex' => 'Format nomor telepon tidak valid. Gunakan format 62xxxxxxxxxxx atau 08xxxxxxxxxx.',
                 'badan_usaha_id.exists' => 'Badan usaha tidak ditemukan.',
                 'division_id.exists' => 'Divisi tidak ditemukan.',
@@ -152,13 +151,12 @@ class OutletController extends Controller
 
             if ($validator->fails()) {
                 DB::rollBack();
-
                 return ResponseFormatter::validation($validator->errors(), 'Gagal menambahkan outlet');
             }
 
             $validated = $validator->validated();
 
-            // Additional phone validation using PhoneService
+            // Validasi tambahan nomor telepon
             if (!PhoneService::isValid($validated['owner_phone'])) {
                 DB::rollBack();
                 return ResponseFormatter::error(
@@ -168,15 +166,14 @@ class OutletController extends Controller
                 );
             }
 
-            // 2. Normalize phone using service
+            // Normalisasi nomor telepon
             $validated['owner_phone'] = PhoneService::normalize($validated['owner_phone']);
 
-            // 3. Handle file uploads
-            $uploadedFiles = $this->handleFileUploads($request, 'outlet');
+            // Upload file ke temp folder (ASYNC)
+            $tempFiles = $this->handleFileUploadsAsync($request, 'outlet');
 
-            // 4. Prepare outlet data
+            // Data outlet tanpa field file (field file dikosongkan, akan diupdate oleh job)
             $outletData = [
-                'code' => strtoupper($validated['code']),
                 'name' => strtoupper($validated['name']),
                 'owner_name' => strtoupper($validated['owner_name']),
                 'owner_phone' => $validated['owner_phone'],
@@ -188,30 +185,45 @@ class OutletController extends Controller
                 'region_id' => $validated['region_id'],
                 'cluster_id' => $validated['cluster_id'],
                 'status' => 'active',
+                // Semua field file dikosongkan
+                'photo_shop_sign' => '',
+                'photo_front' => '',
+                'photo_left' => '',
+                'photo_right' => '',
+                'photo_id_card' => '',
+                'video' => '',
             ];
 
-            // 5. Merge file uploads
-            $outletData = array_merge($outletData, $uploadedFiles);
-
-            // 6. Create outlet
             $outlet = Outlet::create($outletData);
+
+            // Dispatch job untuk proses file dan update field file di database
+            if (!empty($tempFiles)) {
+                \App\Jobs\ProcessFileUploadJob::dispatch(
+                    $tempFiles,
+                    Outlet::class,
+                    $outlet->id,
+                    Auth::id()
+                );
+            }
 
             DB::commit();
 
-            // 7. Load relationships for response
             $outlet->load([
-                'badanUsaha:'.implode(',', BadanUsaha::LIST_COLUMNS),
-                'division:'.implode(',', Division::LIST_COLUMNS),
-                'region:'.implode(',', Region::LIST_COLUMNS),
-                'cluster:'.implode(',', Cluster::LIST_COLUMNS),
+                'badanUsaha:' . implode(',', BadanUsaha::LIST_COLUMNS),
+                'division:' . implode(',', Division::LIST_COLUMNS),
+                'region:' . implode(',', Region::LIST_COLUMNS),
+                'cluster:' . implode(',', Cluster::LIST_COLUMNS),
             ]);
 
-            return ResponseFormatter::success(OutletResource::make($outlet), 'Outlet berhasil ditambahkan');
-
+            return ResponseFormatter::success(
+                OutletResource::make($outlet),
+                !empty($tempFiles)
+                    ? 'Outlet berhasil ditambahkan. File sedang diproses di background.'
+                    : 'Outlet berhasil ditambahkan'
+            );
         } catch (Exception $error) {
             DB::rollBack();
-            Log::error('Error creating outlet: '.$error->getMessage());
-
+            Log::error('Error creating outlet: ' . $error->getMessage());
             return ResponseFormatter::serverError('Gagal menambahkan outlet');
         }
     }
@@ -220,17 +232,14 @@ class OutletController extends Controller
     {
         DB::beginTransaction();
         try {
-            // 1. Find outlet
             $outlet = Outlet::find($id);
-            if (! $outlet) {
+            if (!$outlet) {
                 DB::rollBack();
-
                 return ResponseFormatter::notFound('Outlet tidak ditemukan');
             }
 
-            // 2. Comprehensive validation
             $validator = Validator::make($request->all(), [
-                'code' => 'sometimes|string|max:20|unique:outlets,code,'.$id,
+                'code' => 'sometimes|string|max:20|unique:outlets,code,' . $id,
                 'name' => 'sometimes|string|max:255',
                 'owner_name' => 'required|string|max:255',
                 'owner_phone' => [
@@ -262,13 +271,11 @@ class OutletController extends Controller
 
             if ($validator->fails()) {
                 DB::rollBack();
-
                 return ResponseFormatter::validation($validator->errors(), 'Gagal update outlet');
             }
 
             $validated = $validator->validated();
 
-            // Additional phone validation using PhoneService
             if (!PhoneService::isValid($validated['owner_phone'])) {
                 DB::rollBack();
                 return ResponseFormatter::error(
@@ -278,25 +285,24 @@ class OutletController extends Controller
                 );
             }
 
-            // 3. Normalize phone using service
             if (isset($validated['owner_phone'])) {
                 $validated['owner_phone'] = PhoneService::normalize($validated['owner_phone']);
             }
 
-            // 4. Handle file uploads if any
-            $uploadedFiles = $this->handleFileUploads($request, 'outlet');
+            // Upload file ke temp folder (ASYNC)
+            $tempFiles = $this->handleFileUploadsAsync($request, 'outlet');
 
-            // 4.1. Delete old files if new ones are uploaded
-            foreach ($uploadedFiles as $field => $newFileName) {
-                if (!empty($outlet->$field)) {
-                    FileUploadService::deleteFile($outlet->$field);
+            // Jika ada file baru, hapus file lama (tidak update field file di database di sini)
+            if (!empty($tempFiles)) {
+                foreach ($tempFiles as $field => $tempFileInfo) {
+                    if (!empty($outlet->$field)) {
+                        FileUploadService::deleteFile($outlet->$field);
+                    }
                 }
             }
 
-            // 5. Prepare update data
+            // Data update tanpa field file (field file dikosongkan, akan diupdate oleh job)
             $updateData = [];
-
-            // Basic fields
             $basicFields = ['code', 'name', 'address', 'district', 'badan_usaha_id', 'division_id', 'region_id', 'cluster_id', 'status'];
             foreach ($basicFields as $field) {
                 if (isset($validated[$field])) {
@@ -305,44 +311,188 @@ class OutletController extends Controller
                         : $validated[$field];
                 }
             }
-
-            // Required fields that are always updated
             $updateData['owner_name'] = strtoupper($validated['owner_name']);
             $updateData['owner_phone'] = $validated['owner_phone'];
             $updateData['location'] = strtoupper($validated['location']);
+            // Semua field file dikosongkan
+            if (!empty($tempFiles)) {
+                $updateData['photo_shop_sign'] = '';
+                $updateData['photo_front'] = '';
+                $updateData['photo_left'] = '';
+                $updateData['photo_right'] = '';
+                $updateData['photo_id_card'] = '';
+                $updateData['video'] = '';
+            }
 
-            // 6. Merge file uploads
-            $updateData = array_merge($updateData, $uploadedFiles);
-
-            // 7. Update outlet
             $outlet->update($updateData);
+
+            // Dispatch job untuk proses file dan update field file di database
+            if (!empty($tempFiles)) {
+                \App\Jobs\ProcessFileUploadJob::dispatch(
+                    $tempFiles,
+                    Outlet::class,
+                    $outlet->id,
+                    Auth::id()
+                );
+            }
 
             DB::commit();
 
-            // 8. Load relationships for response
             $outlet->load([
-                'badanUsaha:'.implode(',', BadanUsaha::LIST_COLUMNS),
-                'division:'.implode(',', Division::LIST_COLUMNS),
-                'region:'.implode(',', Region::LIST_COLUMNS),
-                'cluster:'.implode(',', Cluster::LIST_COLUMNS),
+                'badanUsaha:' . implode(',', BadanUsaha::LIST_COLUMNS),
+                'division:' . implode(',', Division::LIST_COLUMNS),
+                'region:' . implode(',', Region::LIST_COLUMNS),
+                'cluster:' . implode(',', Cluster::LIST_COLUMNS),
             ]);
 
-            return ResponseFormatter::success(OutletResource::make($outlet), 'Outlet berhasil diupdate');
-
+            return ResponseFormatter::success(
+                OutletResource::make($outlet),
+                !empty($tempFiles)
+                    ? 'Outlet berhasil diupdate. File sedang diproses di background.'
+                    : 'Outlet berhasil diupdate'
+            );
         } catch (Exception $error) {
             DB::rollBack();
-            Log::error('Error updating outlet: '.$error->getMessage());
-
+            Log::error('Error updating outlet: ' . $error->getMessage());
             return ResponseFormatter::serverError('Gagal update outlet');
         }
     }
 
     /**
-     * Helper method - Handle file uploads
+     * Upgrade outlet from LEAD level to NOO level
      */
-    private function handleFileUploads(Request $request, $action = 'outlet')
+    public function upgrade(Request $request, $id)
     {
-        $uploadedFiles = [];
+        DB::beginTransaction();
+        try {
+            // 1. Find outlet
+            $outlet = Outlet::find($id);
+            if (!$outlet) {
+                DB::rollBack();
+                return ResponseFormatter::notFound('Outlet tidak ditemukan');
+            }
+
+            // 2. Validasi level
+            if ($outlet->level !== 'LEAD') {
+                DB::rollBack();
+                return ResponseFormatter::error(
+                    null,
+                    'Outlet tidak dapat diupgrade. Hanya outlet dengan level "LEAD" yang dapat diupgrade ke level "NOO".',
+                    422
+                );
+            }
+
+            // 3. Validasi file
+            $validator = Validator::make($request->all(), [
+                'photo_id_card' => 'required|image|mimes:jpg,jpeg,png|max:2048',
+            ], [
+                'photo_id_card.required' => 'Foto KTP pemilik wajib diupload untuk upgrade outlet.',
+                'photo_id_card.image' => 'File harus berupa gambar.',
+                'photo_id_card.mimes' => 'Format foto harus JPG, JPEG, atau PNG.',
+                'photo_id_card.max' => 'Ukuran foto maksimal 2MB.',
+            ]);
+
+            if ($validator->fails()) {
+                DB::rollBack();
+                return ResponseFormatter::validation($validator->errors(), 'Gagal upgrade outlet');
+            }
+
+            $photoIdCard = $request->file('photo_id_card');
+            if (!FileUploadService::isValidPhoto($photoIdCard)) {
+                DB::rollBack();
+                return ResponseFormatter::error(
+                    null,
+                    'Format foto KTP tidak didukung. Gunakan format JPG, JPEG, atau PNG.',
+                    422
+                );
+            }
+            if (!FileUploadService::isValidPhotoSize($photoIdCard)) {
+                DB::rollBack();
+                return ResponseFormatter::error(
+                    null,
+                    'Ukuran foto KTP terlalu besar. Maksimal 2MB.',
+                    422
+                );
+            }
+
+            // Upload ke temp folder, field photo_id_card dikosongkan dulu
+            $tempFiles = [];
+            $tempFiles['photo_id_card'] = FileUploadService::uploadPhotoAsync(
+                $photoIdCard,
+                'outlet',
+                $outlet->code ?? 'outlet_' . $outlet->id
+            );
+
+            // Hapus file lama jika ada
+            if (!empty($outlet->photo_id_card)) {
+                FileUploadService::deleteFile($outlet->photo_id_card);
+            }
+
+            // Update outlet: field photo_id_card dikosongkan, level diubah
+            $outlet->update([
+                'level' => 'NOO',
+                'photo_id_card' => '', // Akan diupdate oleh job
+            ]);
+
+            // Dispatch job untuk proses file dan update field file di database
+            \App\Jobs\ProcessFileUploadJob::dispatch(
+                $tempFiles,
+                Outlet::class,
+                $outlet->id,
+                Auth::id()
+            );
+
+            // Simpan ke OutletHistory
+            OutletHistory::create([
+                'outlet_id' => $outlet->id,
+                'from_level' => 'LEAD',
+                'to_level' => 'NOO',
+                'requested_by' => Auth::id(),
+                'approved_by' => null,
+                'approval_status' => null,
+                'requested_at' => now(),
+                'approved_at' => now(),
+                'approval_notes' => null,
+            ]);
+
+            DB::commit();
+
+            $outlet->load([
+                'badanUsaha:' . implode(',', BadanUsaha::LIST_COLUMNS),
+                'division:' . implode(',', Division::LIST_COLUMNS),
+                'region:' . implode(',', Region::LIST_COLUMNS),
+                'cluster:' . implode(',', Cluster::LIST_COLUMNS),
+            ]);
+
+            Log::info('Outlet upgraded successfully', [
+                'outlet_id' => $outlet->id,
+                'outlet_code' => $outlet->code,
+                'from_level' => 'LEAD',
+                'to_level' => 'NOO',
+                'upgraded_by' => Auth::id(),
+            ]);
+
+            return ResponseFormatter::success(
+                OutletResource::make($outlet),
+                'Outlet berhasil diupgrade dari level "LEAD" ke level "NOO". Foto KTP sedang diproses di background.'
+            );
+        } catch (Exception $error) {
+            DB::rollBack();
+            Log::error('Error upgrading outlet: ' . $error->getMessage(), [
+                'outlet_id' => $id,
+                'error' => $error->getMessage(),
+                'user_id' => Auth::id(),
+            ]);
+            return ResponseFormatter::serverError('Gagal upgrade outlet');
+        }
+    }
+
+    /**
+     * Helper method - Handle file uploads ASYNC (for high performance)
+     */
+    private function handleFileUploadsAsync(Request $request, $action = 'outlet')
+    {
+        $tempFiles = [];
 
         // Handle photo uploads
         $photoFields = ['photo_shop_sign', 'photo_front', 'photo_left', 'photo_right', 'photo_id_card'];
@@ -354,18 +504,18 @@ class OutletController extends Controller
             }
         }
 
-        if (! empty($uploadedPhotos)) {
-            $fileNames = FileUploadService::uploadOutletPhotos($uploadedPhotos, $action);
-            $uploadedFiles = array_merge($uploadedFiles, $fileNames);
+        if (!empty($uploadedPhotos)) {
+            $tempPhotoFiles = FileUploadService::uploadOutletPhotosAsync($uploadedPhotos, $action);
+            $tempFiles = array_merge($tempFiles, $tempPhotoFiles);
         }
 
         // Handle video upload
         if ($request->hasFile('video')) {
-            $videoName = FileUploadService::uploadVideo($request->file('video'), $action);
-            $uploadedFiles['video'] = $videoName;
+            $tempVideoFile = FileUploadService::uploadVideoAsync($request->file('video'), $action);
+            $tempFiles['video'] = $tempVideoFile;
         }
 
-        return $uploadedFiles;
+        return $tempFiles;
     }
 
     /**

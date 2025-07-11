@@ -150,10 +150,10 @@ class VisitController extends Controller
                 return $validationResult;
             }
 
-            // 4. Handle photo upload
-            $imageName = FileUploadService::uploadPhoto($validated['checkin_photo'], 'visit-checkin');
+            // 4. Handle photo upload asynchronously
+            $tempFiles = $this->handleFileUploadsAsync($request, 'visit');
 
-            // 5. Create visit
+            // 5. Create visit (without photo - will be updated by job)
             $visit = Visit::create([
                 'visit_date' => Carbon::today(),
                 'user_id' => Auth::user()->id,
@@ -161,12 +161,22 @@ class VisitController extends Controller
                 'type' => $validated['type'],
                 'checkin_location' => $validated['checkin_location'],
                 'checkin_time' => Carbon::now(),
-                'checkin_photo' => $imageName,
+                'checkin_photo' => '', // Will be updated by job
             ]);
+
+            // 6. Dispatch job for file processing
+            if (!empty($tempFiles)) {
+                \App\Jobs\ProcessFileUploadJob::dispatch(
+                    $tempFiles,
+                    Visit::class,
+                    $visit->id,
+                    Auth::id()
+                );
+            }
 
             DB::commit();
 
-            // 6. Load relationships for response
+            // 7. Load relationships for response
             $visit->load([
                 'outlet:'.implode(',', Outlet::LIST_COLUMNS),
                 'outlet.badanUsaha:'.implode(',', BadanUsaha::LIST_COLUMNS),
@@ -176,7 +186,10 @@ class VisitController extends Controller
                 'user:id,name,username',
             ]);
 
-            return ResponseFormatter::success(VisitResource::make($visit), 'Berhasil check-in');
+            return ResponseFormatter::success(
+                VisitResource::make($visit),
+                'Berhasil check-in. Foto sedang diproses di background.'
+            );
 
         } catch (Exception $error) {
             DB::rollBack();
@@ -244,22 +257,32 @@ class VisitController extends Controller
             $checkoutTime = Carbon::now();
             $duration = $checkinTime->diffInMinutes($checkoutTime);
 
-            // 6. Handle photo upload
-            $imageName = FileUploadService::uploadPhoto($validated['checkout_photo'], 'visit-checkout');
+            // 6. Handle photo upload asynchronously
+            $tempFiles = $this->handleFileUploadsAsync($request, 'visit');
 
-            // 7. Update visit
+            // 7. Update visit (without photo - will be updated by job)
             $visit->update([
                 'checkout_location' => $validated['checkout_location'],
                 'checkout_time' => $checkoutTime,
-                'checkout_photo' => $imageName,
+                'checkout_photo' => '', // Will be updated by job
                 'transaction' => $validated['transaction'],
                 'report' => $validated['report'],
                 'duration' => $duration,
             ]);
 
+            // 8. Dispatch job for file processing
+            if (!empty($tempFiles)) {
+                \App\Jobs\ProcessFileUploadJob::dispatch(
+                    $tempFiles,
+                    Visit::class,
+                    $visit->id,
+                    Auth::id()
+                );
+            }
+
             DB::commit();
 
-            // 8. Load relationships for response
+            // 9. Load relationships for response
             $visit->load([
                 'outlet:'.implode(',', Outlet::LIST_COLUMNS),
                 'outlet.badanUsaha:'.implode(',', BadanUsaha::LIST_COLUMNS),
@@ -269,7 +292,10 @@ class VisitController extends Controller
                 'user:id,name,username',
             ]);
 
-            return ResponseFormatter::success(VisitResource::make($visit), 'Berhasil check-out');
+            return ResponseFormatter::success(
+                VisitResource::make($visit),
+                'Berhasil check-out. Foto sedang diproses di background.'
+            );
 
         } catch (Exception $error) {
             DB::rollBack();
@@ -385,5 +411,35 @@ class VisitController extends Controller
         } catch (Exception $error) {
             return ResponseFormatter::serverError();
         }
+    }
+
+    /**
+     * Handle file uploads asynchronously and return temp file info
+     *
+     * @param Request $request
+     * @param string $folder
+     * @return array
+     */
+    private function handleFileUploadsAsync(Request $request, string $folder): array
+    {
+        $tempFiles = [];
+
+        // Handle checkin photo
+        if ($request->hasFile('checkin_photo')) {
+            $tempFiles['checkin_photo'] = FileUploadService::uploadPhotoAsync(
+                $request->file('checkin_photo'),
+                $folder . '-checkin'
+            );
+        }
+
+        // Handle checkout photo
+        if ($request->hasFile('checkout_photo')) {
+            $tempFiles['checkout_photo'] = FileUploadService::uploadPhotoAsync(
+                $request->file('checkout_photo'),
+                $folder . '-checkout'
+            );
+        }
+
+        return $tempFiles;
     }
 }

@@ -67,14 +67,26 @@ class Outlet extends Model implements HasCustomFields
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-        ->logOnly([
-            'code', 'name', 'address', 'owner_name', 'owner_phone',
-            'badan_usaha_id', 'division_id', 'region_id', 'cluster_id',
-            'district', 'status', 'level', 'limit', 'radius', 'location'
-        ]);
+            ->logOnly([
+                'code',
+                'name',
+                'address',
+                'owner_name',
+                'owner_phone',
+                'badan_usaha_id',
+                'division_id',
+                'region_id',
+                'cluster_id',
+                'district',
+                'status',
+                'level',
+                'limit',
+                'radius',
+                'location'
+            ]);
     }
 
-public function badanUsaha()
+    public function badanUsaha()
     {
         return $this->belongsTo(BadanUsaha::class);
     }

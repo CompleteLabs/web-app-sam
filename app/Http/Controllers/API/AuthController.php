@@ -30,9 +30,11 @@ class AuthController extends Controller
     {
         try {
             $user = User::with([
-                'role:'.implode(',', Role::LIST_COLUMNS),
-                'userScopes:'.implode(',', UserScope::LIST_COLUMNS),
+                'role:' . implode(',', Role::LIST_COLUMNS),
+                'role.permissions:id,name',
+                'userScopes:' . implode(',', UserScope::LIST_COLUMNS),
             ])
+                ->select(User::LIST_COLUMNS)
                 ->where('id', Auth::user()->id)
                 ->first();
 
@@ -41,10 +43,14 @@ class AuthController extends Controller
                 'username' => $user->username
             ]);
 
-            return ResponseFormatter::success(
-                UserResource::make($user),
-                'Data profil pengguna berhasil diambil'
-            );
+            // Get current token from request
+            // $currentToken = $request->bearerToken();
+
+            return ResponseFormatter::success([
+                // 'access_token' => $currentToken,
+                // 'token_type' => 'Bearer',
+                'user' => UserResource::make($user),
+            ], 'Data profil pengguna berhasil diambil');
         } catch (Exception $error) {
             Log::error('Error fetching profile: ' . $error->getMessage(), [
                 'user_id' => Auth::id(),
@@ -122,8 +128,8 @@ class AuthController extends Controller
 
             // Reload user with relationships
             $updatedUser = User::with([
-                'role:'.implode(',', Role::LIST_COLUMNS),
-                'userScopes:'.implode(',', UserScope::LIST_COLUMNS),
+                'role:' . implode(',', Role::LIST_COLUMNS),
+                'userScopes:' . implode(',', UserScope::LIST_COLUMNS),
             ])
                 ->where('id', $user->id)
                 ->first();
@@ -172,7 +178,7 @@ class AuthController extends Controller
             $photo = $request->file('photo');
             $oldPhoto = $user->photo;
 
-            // Validate file type and size using FileUploadService
+            // Validasi file
             if (!FileUploadService::isValidPhoto($photo)) {
                 return ResponseFormatter::error(
                     null,
@@ -180,7 +186,6 @@ class AuthController extends Controller
                     422
                 );
             }
-
             if (!FileUploadService::isValidPhotoSize($photo)) {
                 return ResponseFormatter::error(
                     null,
@@ -189,16 +194,16 @@ class AuthController extends Controller
                 );
             }
 
-            // Upload new photo first
-            $fileName = FileUploadService::uploadPhoto($photo, 'profile', $user->username);
+            // Upload file secara sinkron ke storage permanen
+            $photoPath = FileUploadService::uploadPhotoSync($photo, 'profile', $user->username);
 
-            // Update user photo in database
-            $user->photo = $fileName;
+            // Update user photo di database
+            $user->photo = $photoPath;
             $user->save();
 
             DB::commit();
 
-            // Delete old photo after successful database update
+            // Hapus foto lama jika ada
             if ($oldPhoto) {
                 try {
                     $deleted = FileUploadService::deleteFile($oldPhoto);
@@ -219,27 +224,24 @@ class AuthController extends Controller
                         'old_photo' => $oldPhoto,
                         'error' => $e->getMessage()
                     ]);
-                    // Continue since the new photo is already uploaded and database updated
                 }
             }
 
-            // Reload user with relationships
+            // Reload user dengan relasi
             $updatedUser = User::with([
-                'role:'.implode(',', Role::LIST_COLUMNS),
-                'userScopes:'.implode(',', UserScope::LIST_COLUMNS),
-            ])
-                ->where('id', $user->id)
-                ->first();
+                'role:' . implode(',', Role::LIST_COLUMNS),
+                'userScopes:' . implode(',', UserScope::LIST_COLUMNS),
+            ])->where('id', $user->id)->first();
 
-            Log::info('Profile photo updated successfully', [
+            Log::info('Profile photo updated successfully (sync)', [
                 'user_id' => $user->id,
                 'old_photo' => $oldPhoto,
-                'new_photo' => $fileName
+                'new_photo' => $photoPath
             ]);
 
             return ResponseFormatter::success(
                 UserResource::make($updatedUser),
-                'Foto profil berhasil diperbarui'
+                'Foto profil berhasil diperbarui.'
             );
         } catch (Exception $error) {
             DB::rollBack();
@@ -306,8 +308,8 @@ class AuthController extends Controller
 
             // Reload user with relationships
             $updatedUser = User::with([
-                'role:'.implode(',', Role::LIST_COLUMNS),
-                'userScopes:'.implode(',', UserScope::LIST_COLUMNS),
+                'role:' . implode(',', Role::LIST_COLUMNS),
+                'userScopes:' . implode(',', UserScope::LIST_COLUMNS),
             ])
                 ->where('id', $user->id)
                 ->first();
@@ -365,158 +367,13 @@ class AuthController extends Controller
             $credentials = $request->only(['username', 'password']);
 
             if (! Auth::attempt($credentials)) {
-                // Jika gagal login lokal, coba ke API eksternal
-                try {
-                    $client = new \GuzzleHttp\Client;
-                    $response = $client->post(config('business.external_api.login_url'), [
-                        'form_params' => [
-                            'username' => $request->username,
-                            'password' => $request->password,
-                            'version' => '1.0.3', // Versi API eksternal
-                            'notif_id' => $request->notif_id,
-                        ],
-                        'timeout' => config('business.external_api.timeout'),
-                    ]);
-                    $data = json_decode($response->getBody(), true);
-                    if (isset($data['data']['user'])) {
-                        DB::beginTransaction();
-                        try {
-                            $userData = $data['data']['user'];
-                            // Simpan user ke database lokal
-                            $user = new \App\Models\User;
-                            $user->username = strtolower($userData['username'] ?? $request->username); // Store username in lowercase
-                            $user->name = strtoupper($userData['nama_lengkap'] ?? $request->name); // Store name in uppercase
-                            $user->email = $userData['email'] ?? null;
-                            $user->password = bcrypt($request->password);
-
-                            $roleId = null;
-                            if (isset($userData['role']['name'])) {
-                                $role = \App\Models\Role::where('name', $userData['role']['name'])->first();
-                                if ($role) {
-                                    $roleId = $role->id;
-                                }
-                            }
-                            $user->role_id = $roleId;
-
-                            $tmId = null;
-                            if (isset($userData['tm_id'])) {
-                                $tm = \App\Models\User::where('username', $userData['tm_id'])->first();
-                                if ($tm) {
-                                    $tmId = $tm->id;
-                                }
-                            }
-
-                            $user->tm_id = $tmId;
-
-                            $user->save();
-
-                            // Simpan scope ke user_scope
-                            $scope = new \App\Models\UserScope;
-                            $scope->user_id = $user->id;
-
-                            // Ambil scope_required_fields dari role
-                            // Mapping id scope secara hirarkis
-                            $scopeFields = [];
-                            if (isset($role) && $role && $role->scope_required_fields) {
-                                $scopeFields = is_array($role->scope_required_fields)
-                                    ? $role->scope_required_fields
-                                    : json_decode($role->scope_required_fields, true);
-                            }
-                            $scopeData = [];
-                            // Badan Usaha
-                            if (in_array('badan_usaha_id', $scopeFields)) {
-                                $badanUsahaId = null;
-                                if (isset($userData['badanusaha']['name'])) {
-                                    $bu = \App\Models\BadanUsaha::where('name', $userData['badanusaha']['name'])->first();
-                                    if ($bu) {
-                                        $badanUsahaId = $bu->id;
-                                    }
-                                }
-                                $scopeData['badan_usaha_id'] = $badanUsahaId;
-                            }
-                            // Division
-                            if (in_array('division_id', $scopeFields)) {
-                                $divisionId = null;
-                                if (isset($userData['divisi']['name'])) {
-                                    $query = \App\Models\Division::where('name', $userData['divisi']['name']);
-                                    if (! empty($scopeData['badan_usaha_id'])) {
-                                        $query->where('badan_usaha_id', $scopeData['badan_usaha_id']);
-                                    }
-                                    $div = $query->first();
-                                    if ($div) {
-                                        $divisionId = $div->id;
-                                    }
-                                }
-                                $scopeData['division_id'] = $divisionId;
-                            }
-                            // Region
-                            if (in_array('region_id', $scopeFields)) {
-                                $regionId = null;
-                                if (isset($userData['region']['name'])) {
-                                    $query = \App\Models\Region::where('name', $userData['region']['name']);
-                                    if (! empty($scopeData['badan_usaha_id'])) {
-                                        $query->where('badan_usaha_id', $scopeData['badan_usaha_id']);
-                                    }
-                                    if (! empty($scopeData['division_id'])) {
-                                        $query->where('division_id', $scopeData['division_id']);
-                                    }
-                                    $reg = $query->first();
-                                    if ($reg) {
-                                        $regionId = $reg->id;
-                                    }
-                                }
-                                $scopeData['region_id'] = $regionId;
-                            }
-                            // Cluster
-                            if (in_array('cluster_id', $scopeFields)) {
-                                $clusterId = null;
-                                if (isset($userData['cluster']['name'])) {
-                                    $query = \App\Models\Cluster::where('name', $userData['cluster']['name']);
-                                    if (! empty($scopeData['badan_usaha_id'])) {
-                                        $query->where('badan_usaha_id', $scopeData['badan_usaha_id']);
-                                    }
-                                    if (! empty($scopeData['division_id'])) {
-                                        $query->where('division_id', $scopeData['division_id']);
-                                    }
-                                    if (! empty($scopeData['region_id'])) {
-                                        $query->where('region_id', $scopeData['region_id']);
-                                    }
-                                    $clu = $query->first();
-                                    if ($clu) {
-                                        $clusterId = $clu->id;
-                                    }
-                                }
-                                $scopeData['cluster_id'] = $clusterId;
-                            }
-                            // Simpan ke user_scope
-                            foreach ($scopeData as $key => $val) {
-                                $scope->$key = $val;
-                            }
-                            $scope->save();
-
-                            DB::commit();
-
-                            // Login ulang
-                            if (! Auth::attempt($credentials)) {
-                                return ResponseFormatter::error(null, 'Cek kembali username dan password anda', 401);
-                            }
-                        } catch (\Exception $e) {
-                            DB::rollBack();
-
-                            return ResponseFormatter::error(null, 'Gagal membuat user baru', 500);
-                        }
-                    } else {
-                        return ResponseFormatter::error(null, 'Cek kembali username dan password anda', 401);
-                    }
-                } catch (\Exception $e) {
-                    return ResponseFormatter::error(null, 'Gagal terhubung ke sistem eksternal', 401);
-                }
+                return ResponseFormatter::error(null, 'Cek kembali username dan password anda', 401);
             }
 
             $user = User::with([
-                'role:'.implode(',', Role::LIST_COLUMNS),
+                'role:' . implode(',', Role::LIST_COLUMNS),
                 'role.permissions:id,name',
-                'userScopes:'.implode(',', UserScope::LIST_COLUMNS),
+                'userScopes:' . implode(',', UserScope::LIST_COLUMNS),
             ])
                 ->select(User::LIST_COLUMNS)
                 ->where('username', $request->username)
@@ -597,15 +454,14 @@ class AuthController extends Controller
 
             // 5. Log successful OTP send
             Log::info('OTP sent successfully', [
-                'phone' => substr($phone, 0, 5).'xxx'.substr($phone, -3), // Masked phone
+                'phone' => substr($phone, 0, 5) . 'xxx' . substr($phone, -3), // Masked phone
                 'timestamp' => now(),
             ]);
 
             return ResponseFormatter::success(null, 'OTP berhasil dikirim ke WhatsApp Anda');
-
         } catch (Exception $error) {
-            Log::error('Error sending OTP: '.$error->getMessage(), [
-                'phone' => isset($phone) ? substr($phone, 0, 5).'xxx'.substr($phone, -3) : 'unknown',
+            Log::error('Error sending OTP: ' . $error->getMessage(), [
+                'phone' => isset($phone) ? substr($phone, 0, 5) . 'xxx' . substr($phone, -3) : 'unknown',
                 'error' => $error->getMessage(),
             ]);
 
@@ -663,7 +519,7 @@ class AuthController extends Controller
             if (! $user) {
                 DB::rollBack();
                 Log::warning('OTP verification failed - user not found', [
-                    'phone' => substr($phone, 0, 5).'xxx'.substr($phone, -3),
+                    'phone' => substr($phone, 0, 5) . 'xxx' . substr($phone, -3),
                 ]);
 
                 return ResponseFormatter::notFound('Nomor handphone tidak terdaftar');
@@ -687,9 +543,9 @@ class AuthController extends Controller
 
             // 9. Load relationships for response
             $user->load([
-                'role:'.implode(',', Role::LIST_COLUMNS),
+                'role:' . implode(',', Role::LIST_COLUMNS),
                 'role.permissions:id,name',
-                'userScopes:'.implode(',', UserScope::LIST_COLUMNS),
+                'userScopes:' . implode(',', UserScope::LIST_COLUMNS),
             ]);
 
             // 10. Generate token
@@ -698,7 +554,7 @@ class AuthController extends Controller
             // 11. Log successful login
             Log::info('OTP verification successful', [
                 'user_id' => $user->id,
-                'phone' => substr($phone, 0, 5).'xxx'.substr($phone, -3),
+                'phone' => substr($phone, 0, 5) . 'xxx' . substr($phone, -3),
                 'login_method' => 'otp',
             ]);
 
@@ -707,11 +563,10 @@ class AuthController extends Controller
                 'token_type' => 'Bearer',
                 'user' => UserResource::make($user),
             ], 'Login berhasil');
-
         } catch (Exception $error) {
             DB::rollBack();
-            Log::error('Error verifying OTP: '.$error->getMessage(), [
-                'phone' => isset($phone) ? substr($phone, 0, 5).'xxx'.substr($phone, -3) : 'unknown',
+            Log::error('Error verifying OTP: ' . $error->getMessage(), [
+                'phone' => isset($phone) ? substr($phone, 0, 5) . 'xxx' . substr($phone, -3) : 'unknown',
                 'error' => $error->getMessage(),
             ]);
 
@@ -832,41 +687,5 @@ class AuthController extends Controller
         Cache::forget("otp_requests:{$phone}");
         Cache::forget("otp_requests_time:{$phone}");
         Cache::forget("otp_last_sent:{$phone}");
-    }
-
-    /**
-     * Helper method - Format user permissions safely
-     */
-    private function formatPermissions($user)
-    {
-        try {
-            // Gunakan permissions dari role relationship yang sudah di-load
-            if ($user->relationLoaded('role') && $user->role && $user->role->relationLoaded('permissions')) {
-                return $user->role->permissions->map(function ($permission) {
-                    return [
-                        'id' => $permission->id,
-                        'name' => $permission->name,
-                    ];
-                });
-            }
-
-            // Fallback: load permissions manually jika belum di-load
-            $user->load('role.permissions');
-
-            return $user->role->permissions->map(function ($permission) {
-                return [
-                    'id' => $permission->id,
-                    'name' => $permission->name,
-                ];
-            });
-        } catch (Exception $e) {
-            Log::warning('Error formatting permissions', [
-                'user_id' => $user->id ?? null,
-                'error' => $e->getMessage(),
-            ]);
-
-            // Return empty collection jika ada error
-            return collect([]);
-        }
     }
 }

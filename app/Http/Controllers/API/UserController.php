@@ -103,6 +103,7 @@ class UserController extends Controller
                 'cluster' => 'nullable|string',
             ], [
                 'phone.regex' => 'Format nomor telepon tidak valid. Gunakan format 62xxxxxxxxxxx atau 08xxxxxxxxxx.',
+                'cluster' => 'Format cluster harus berupa angka tunggal atau beberapa angka dipisahkan koma (contoh: 395 atau 395,396)',
             ]);
 
             if ($validator->fails()) {
@@ -187,16 +188,16 @@ class UserController extends Controller
 
         $scopeData = [];
         if (in_array('badan_usaha_id', $scopeFields)) {
-            $scopeData['badan_usaha_id'] = $request->badanusaha ?? null;
+            $scopeData['badan_usaha_id'] = $this->parseMultipleValues($request->badanusaha);
         }
         if (in_array('division_id', $scopeFields)) {
-            $scopeData['division_id'] = $request->divisi ?? null;
+            $scopeData['division_id'] = $this->parseMultipleValues($request->divisi);
         }
         if (in_array('region_id', $scopeFields)) {
-            $scopeData['region_id'] = $request->region ?? null;
+            $scopeData['region_id'] = $this->parseMultipleValues($request->region);
         }
         if (in_array('cluster_id', $scopeFields)) {
-            $scopeData['cluster_id'] = $request->cluster ?? null;
+            $scopeData['cluster_id'] = $this->parseMultipleValues($request->cluster);
         }
 
         $scope = new UserScope;
@@ -207,12 +208,58 @@ class UserController extends Controller
         $scope->save();
     }
 
+    /**
+     * Parse multiple values from comma-separated string to array
+     *
+     * Examples:
+     * - "395,396" → [395, 396]
+     * - "395" → [395]
+     * - 395 → [395]
+     * - [395, 396] → [395, 396]
+     * - null/empty → null
+     */
+    private function parseMultipleValues($value): ?array
+    {
+        if (empty($value)) {
+            return null;
+        }
+
+        // If it's already an array, return as is
+        if (is_array($value)) {
+            return array_map('intval', $value);
+        }
+
+        // If it's a string, split by comma and convert to integers
+        if (is_string($value)) {
+            $values = explode(',', $value);
+            $values = array_map('trim', $values);
+            $values = array_filter($values, function($val) {
+                return !empty($val) && is_numeric($val);
+            });
+
+            if (empty($values)) {
+                return null;
+            }
+
+            return array_map('intval', $values);
+        }
+
+        // If it's a single numeric value
+        if (is_numeric($value)) {
+            return [intval($value)];
+        }
+
+        return null;
+    }
+
     // Update user
     public function update(Request $request, $id)
     {
+        DB::beginTransaction();
         try {
             $user = User::find($id);
             if (! $user) {
+                DB::rollBack();
                 return ResponseFormatter::notFound('User tidak ditemukan');
             }
 
@@ -225,11 +272,18 @@ class UserController extends Controller
                     'sometimes',
                     'regex:/^(\\+62|62|0)8[1-9][0-9]{6,10}$/',
                 ],
+                'role' => 'sometimes|integer|exists:roles,id',
+                'badanusaha' => 'nullable|string',
+                'divisi' => 'nullable|string',
+                'region' => 'nullable|string',
+                'cluster' => 'nullable|string',
             ], [
                 'phone.regex' => 'Format nomor telepon tidak valid. Gunakan format 62xxxxxxxxxxx atau 08xxxxxxxxxx.',
+                'cluster' => 'Format cluster harus berupa angka tunggal atau beberapa angka dipisahkan koma (contoh: 395 atau 395,396)',
             ]);
 
             if ($validator->fails()) {
+                DB::rollBack();
                 return ResponseFormatter::validation($validator->errors(), 'Gagal mengupdate user');
             }
 
@@ -241,6 +295,7 @@ class UserController extends Controller
 
                 // Check phone uniqueness
                 if (User::where('phone', $phone)->where('id', '!=', $id)->exists()) {
+                    DB::rollBack();
                     return ResponseFormatter::validation(['phone' => ['Nomor sudah terdaftar']], 'Gagal mengupdate user');
                 }
 
@@ -260,17 +315,65 @@ class UserController extends Controller
                 $validated['username'] = strtolower($validated['username']);
             }
 
-            $user->update($validated);
+            // Update user basic info
+            $userUpdateData = collect($validated)->except(['role', 'badanusaha', 'divisi', 'region', 'cluster'])->toArray();
+            if (!empty($userUpdateData)) {
+                $user->update($userUpdateData);
+            }
+
+            // Update role if provided
+            if (isset($validated['role'])) {
+                $user->role_id = $validated['role'];
+                $user->save();
+            }
+
+            // Update user scope if any scope-related fields are provided
+            if ($request->hasAny(['badanusaha', 'divisi', 'region', 'cluster'])) {
+                $this->updateUserScope($user, $request);
+            }
+
+            DB::commit();
 
             // Load relationships for response
             $user->load(['role:id,name', 'userScopes']);
 
             return ResponseFormatter::success(UserResource::make($user), 'User berhasil diupdate');
         } catch (Exception $e) {
+            DB::rollBack();
             Log::error('Error updating user: '.$e->getMessage());
 
             return ResponseFormatter::serverError('Gagal mengupdate user');
         }
+    }
+
+    /**
+     * Update user scope for existing user
+     */
+    private function updateUserScope(User $user, Request $request): void
+    {
+        // Find existing user scope or create new one
+        $scope = UserScope::where('user_id', $user->id)->first();
+
+        if (!$scope) {
+            $scope = new UserScope();
+            $scope->user_id = $user->id;
+        }
+
+        // Update scope data if provided in request
+        if ($request->has('badanusaha')) {
+            $scope->badan_usaha_id = $this->parseMultipleValues($request->badanusaha);
+        }
+        if ($request->has('divisi')) {
+            $scope->division_id = $this->parseMultipleValues($request->divisi);
+        }
+        if ($request->has('region')) {
+            $scope->region_id = $this->parseMultipleValues($request->region);
+        }
+        if ($request->has('cluster')) {
+            $scope->cluster_id = $this->parseMultipleValues($request->cluster);
+        }
+
+        $scope->save();
     }
 
     // Delete user
