@@ -322,6 +322,9 @@ class OutletResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->deferLoading()
+            ->paginationPageOptions([10, 25, 50])
+            ->defaultPaginationPageOption(10)
             ->columns([
                 Tables\Columns\TextColumn::make('code')
                     ->label('Kode Outlet')
@@ -457,7 +460,6 @@ class OutletResource extends Resource
             ])
             ->defaultSort('code', 'asc')
             ->striped()
-            ->deferLoading()
             ->filters([
                 TrashedFilter::make(),
                 SelectFilter::make('level')

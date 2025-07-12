@@ -66,6 +66,9 @@ class RegionResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->deferLoading()
+            ->paginationPageOptions([10, 25, 50])
+            ->defaultPaginationPageOption(10)
             ->columns([
                 Tables\Columns\TextColumn::make('name')
                     ->searchable(),
@@ -83,7 +86,6 @@ class RegionResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('name', 'asc')
-            ->deferLoading()
             ->filters([
                 Tables\Filters\SelectFilter::make('badanUsaha')
                     ->relationship('badanUsaha', 'name')

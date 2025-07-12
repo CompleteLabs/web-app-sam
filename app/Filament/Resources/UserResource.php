@@ -268,6 +268,9 @@ class UserResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->deferLoading()
+            ->paginationPageOptions([10, 25, 50])
+            ->defaultPaginationPageOption(10)
             ->columns([
                 Tables\Columns\ImageColumn::make('photo')
                     ->label('Foto')
@@ -339,7 +342,6 @@ class UserResource extends Resource
             ])
             ->defaultSort('name', 'asc')
             ->striped()
-            ->deferLoading()
             ->filters([
                 TrashedFilter::make(),
                 Tables\Filters\SelectFilter::make('role_id')

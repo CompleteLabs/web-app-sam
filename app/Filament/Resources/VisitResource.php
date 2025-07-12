@@ -194,6 +194,9 @@ class VisitResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->deferLoading()
+            ->paginationPageOptions([10, 25, 50])
+            ->defaultPaginationPageOption(10)
             ->columns([
                 Tables\Columns\TextColumn::make('visit_date')
                     ->label('Visit Date')
@@ -299,7 +302,6 @@ class VisitResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('created_at', 'desc')
-            ->deferLoading()
             ->striped()
             ->filters([
                 TrashedFilter::make(),
