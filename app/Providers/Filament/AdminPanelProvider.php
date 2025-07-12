@@ -95,6 +95,13 @@ class AdminPanelProvider extends PanelProvider
                     ->sort(998)
                     ->openUrlInNewTab()
                     ->visible(fn(): bool => Auth::check() && Auth::user()?->role?->name === 'SUPER ADMIN'),
+                NavigationItem::make('Health Check')
+                    ->url(fn() => url('health-check'))
+                    ->icon('heroicon-o-heart')
+                    ->group('System')
+                    ->sort(997)
+                    ->openUrlInNewTab()
+                    ->visible(fn(): bool => Auth::check() && Auth::user()?->role?->name === 'SUPER ADMIN'),
             ]);
     }
 }
