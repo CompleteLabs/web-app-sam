@@ -19,11 +19,19 @@ class LogViewerServiceProvider extends ServiceProvider
     /**
      * Bootstrap any application services.
      */
+    /**
+     * Bootstrap any application services.
+     *
+     * LogViewer Configuration:
+     * - URL Path: 'log-viewer' (fixed path)
+     * - Access: SUPER ADMIN role only
+     * - Gate: viewLogViewer
+     */
     public function boot(): void
     {
         Gate::define('viewLogViewer', function ($user = null) {
             // Only allow SUPER ADMIN to access log viewer
-            return Auth::user()?->role?->name === 'SUPER ADMIN';
+            return $user && $user->role && $user->role->name === 'SUPER ADMIN';
         });
     }
 }
