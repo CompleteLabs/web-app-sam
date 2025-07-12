@@ -30,8 +30,8 @@ class ManageRegions extends ManageRecords
                     SyncDataDispatcherJob::dispatch('regions', Auth::id());
 
                     Notification::make()
-                        ->title('Sync Started')
-                        ->body('Data sync has been queued and will run in the background. You will be notified when it completes.')
+                        ->title('Sinkronisasi Dimulai')
+                        ->body('Proses sinkronisasi Region telah dimulai di background. Anda akan mendapat notifikasi setelah selesai.')
                         ->info()
                         ->send();
                 })

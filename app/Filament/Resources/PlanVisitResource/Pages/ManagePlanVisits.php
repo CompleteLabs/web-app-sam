@@ -26,18 +26,20 @@ class ManagePlanVisits extends ManageRecords
         // Only show sync button for super admin
         if (Auth::user() && Auth::user()->role && Auth::user()->role->name === 'SUPER ADMIN') {
             $actions[] = Actions\Action::make('sync_plan_visits')
-                ->label('Sync Plan Visits')
+                ->label('Sync dari API')
                 ->icon('heroicon-o-arrow-path')
+                ->color('warning')
                 ->requiresConfirmation()
-                ->modalHeading('Sync Plan Visits')
-                ->modalDescription('Sinkronisasi data plan visits dari API. Proses akan dijalankan di background menggunakan queue.')
+                ->modalHeading('Konfirmasi Sync Data')
+                ->modalDescription('Apakah Anda yakin ingin melakukan sinkronisasi data Plan Visit dari API? Proses ini akan berjalan di background.')
+                ->modalSubmitActionLabel('Ya, Sync Data')
                 ->action(function () {
                     // Dispatch job to queue
                     SyncDataDispatcherJob::dispatch('planvisits', Auth::id());
 
                     Notification::make()
-                        ->title('Sync Plan Visits Started')
-                        ->body('Proses sync plan visits telah dimulai di background. Anda akan mendapat notifikasi setelah selesai.')
+                        ->title('Sinkronisasi Dimulai')
+                        ->body('Proses sinkronisasi Plan Visit telah dimulai di background. Anda akan mendapat notifikasi setelah selesai.')
                         ->info()
                         ->send();
                 });

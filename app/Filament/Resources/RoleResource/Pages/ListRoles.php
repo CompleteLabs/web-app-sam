@@ -22,18 +22,20 @@ class ListRoles extends ListRecords
         // Only show sync button for super admin
         if (Auth::user() && Auth::user()->role && Auth::user()->role->name === 'SUPER ADMIN') {
             $actions[] = Actions\Action::make('sync_roles')
-                ->label('Sync Roles')
+                ->label('Sync dari API')
                 ->icon('heroicon-o-arrow-path')
+                ->color('warning')
                 ->requiresConfirmation()
-                ->modalHeading('Sync Roles')
-                ->modalDescription('Sinkronisasi data roles dari API. Proses akan dijalankan di background menggunakan queue.')
+                ->modalHeading('Konfirmasi Sync Data')
+                ->modalDescription('Apakah Anda yakin ingin melakukan sinkronisasi data Role dari API? Proses ini akan berjalan di background.')
+                ->modalSubmitActionLabel('Ya, Sync Data')
                 ->action(function () {
                     // Dispatch job to queue
                     SyncDataDispatcherJob::dispatch('roles', Auth::id());
 
                     Notification::make()
-                        ->title('Sync Roles Started')
-                        ->body('Proses sync roles telah dimulai di background. Anda akan mendapat notifikasi setelah selesai.')
+                        ->title('Sinkronisasi Dimulai')
+                        ->body('Proses sinkronisasi Role telah dimulai di background. Anda akan mendapat notifikasi setelah selesai.')
                         ->info()
                         ->send();
                 });

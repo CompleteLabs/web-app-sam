@@ -27,18 +27,20 @@ class ListUsers extends ListRecords
         // Only show sync button for super admin
         if (Auth::user() && Auth::user()->role && Auth::user()->role->name === 'SUPER ADMIN') {
             $actions[] = Actions\Action::make('sync_users')
-                ->label('Sync Users')
+                ->label('Sync dari API')
                 ->icon('heroicon-o-arrow-path')
+                ->color('warning')
                 ->requiresConfirmation()
-                ->modalHeading('Sync Users')
-                ->modalDescription('Sinkronisasi data users dari API. Proses akan dijalankan di background menggunakan queue.')
+                ->modalHeading('Konfirmasi Sync Data')
+                ->modalDescription('Apakah Anda yakin ingin melakukan sinkronisasi data User dari API? Proses ini akan berjalan di background.')
+                ->modalSubmitActionLabel('Ya, Sync Data')
                 ->action(function () {
                     // Dispatch job to queue
                     SyncDataDispatcherJob::dispatch('users', Auth::id());
 
                     Notification::make()
-                        ->title('Sync Users Started')
-                        ->body('Proses sync users telah dimulai di background. Anda akan mendapat notifikasi setelah selesai.')
+                        ->title('Sinkronisasi Dimulai')
+                        ->body('Proses sinkronisasi User telah dimulai di background. Anda akan mendapat notifikasi setelah selesai.')
                         ->info()
                         ->send();
                 });

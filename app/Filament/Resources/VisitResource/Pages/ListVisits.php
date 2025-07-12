@@ -27,11 +27,13 @@ class ListVisits extends ListRecords
         // Only show sync button for super admin
         if (Auth::user() && Auth::user()->role && Auth::user()->role->name === 'SUPER ADMIN') {
             $actions[] = Actions\Action::make('sync_visits')
-                ->label('Sync Visits')
+                ->label('Sync dari API')
                 ->icon('heroicon-o-arrow-path')
+                ->color('warning')
                 ->requiresConfirmation()
-                ->modalHeading('Sync Visits')
-                ->modalDescription('Sinkronisasi data visits dari API. Proses akan dijalankan di background menggunakan queue.')
+                ->modalHeading('Konfirmasi Sync Data')
+                ->modalDescription('Apakah Anda yakin ingin melakukan sinkronisasi data Visit dari API? Proses ini akan berjalan di background.')
+                ->modalSubmitActionLabel('Ya, Sync Data')
                 ->action(function () {
                     // Get current month and year as default
                     $currentMonth = now()->month;
@@ -41,8 +43,8 @@ class ListVisits extends ListRecords
                     SyncDataDispatcherJob::dispatch('visits', Auth::id(), 100, $currentMonth, $currentYear);
 
                     Notification::make()
-                        ->title('Sync Visits Started')
-                        ->body("Proses sync visits untuk bulan {$currentMonth} tahun {$currentYear} telah dimulai di background. Anda akan mendapat notifikasi setelah selesai.")
+                        ->title('Sinkronisasi Dimulai')
+                        ->body("Proses sinkronisasi Visit untuk bulan {$currentMonth} tahun {$currentYear} telah dimulai di background. Anda akan mendapat notifikasi setelah selesai.")
                         ->info()
                         ->send();
                 });
@@ -90,8 +92,8 @@ class ListVisits extends ListRecords
 
                     $monthName = \Carbon\Carbon::create($year, $month, 1)->format('F');
                     Notification::make()
-                        ->title('Sync Visits Started')
-                        ->body("Proses sync visits untuk {$monthName} {$year} telah dimulai di background. Anda akan mendapat notifikasi setelah selesai.")
+                        ->title('Sinkronisasi Dimulai')
+                        ->body("Proses sinkronisasi Visit untuk {$monthName} {$year} telah dimulai di background. Anda akan mendapat notifikasi setelah selesai.")
                         ->info()
                         ->send();
                 });

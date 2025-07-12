@@ -7,9 +7,9 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 
 class SyncDataDispatcherJob implements ShouldQueue
 {
@@ -53,38 +53,43 @@ class SyncDataDispatcherJob implements ShouldQueue
                 return;
             }
 
-            // Generate unique sync ID for tracking
-            $syncId = Str::uuid()->toString();
-
             // Split data into batches
             $batches = array_chunk($data, $this->batchSize);
             $totalBatches = count($batches);
 
-            Log::info("Dispatching {$totalBatches} batch jobs for {$this->entityType} (Sync ID: {$syncId})");
+            Log::info("Creating batch of {$totalBatches} jobs for {$this->entityType}");
 
-            // Dispatch batch jobs
-            foreach ($batches as $index => $batchData) {
-                $batchNumber = $index + 1;
-
-                SyncDataBatchJob::dispatch(
+            // Create batch jobs
+            $jobs = [];
+            foreach ($batches as $batchData) {
+                $jobs[] = new SyncDataBatchJob(
                     $this->entityType,
                     $batchData,
-                    $batchNumber,
-                    $totalBatches,
-                    $syncId,
                     $this->userId
-                )->delay(now()->addSeconds($index * 2)); // Small delay between batch dispatches
+                );
             }
 
-            Log::info("Successfully dispatched {$totalBatches} batch jobs for {$this->entityType}");
+            // Dispatch as Laravel Batch (Filament-style pattern)
+            $batch = Bus::batch($jobs)
+                ->name("Sync {$this->entityType}")
+                ->allowFailures()
+                ->dispatch();
+
+            // Chain completion job - this is the Filament pattern
+            Log::info("Dispatching completion job for batch {$batch->id}");
+            SyncDataCompletionJob::dispatch($batch->id, $this->entityType, $this->userId, $totalRecords)
+                ->delay(now()->addSeconds(1)); // Reduced delay for faster completion
+
+            // Log batch information
+            Log::info("Successfully dispatched batch with ID: {$batch->id} for {$this->entityType}");
 
         } catch (\Exception $e) {
             Log::error("Sync dispatcher failed for {$this->entityType}: " . $e->getMessage());
 
             if ($this->userId) {
                 \Filament\Notifications\Notification::make()
-                    ->title("Sync " . ucfirst($this->entityType) . " Failed")
-                    ->body("Failed to start sync: " . $e->getMessage())
+                    ->title("Sinkronisasi " . ucfirst($this->entityType) . " Gagal")
+                    ->body("Gagal memulai sinkronisasi: " . $e->getMessage())
                     ->danger()
                     ->sendToDatabase(\App\Models\User::find($this->userId));
             }
@@ -153,8 +158,8 @@ class SyncDataDispatcherJob implements ShouldQueue
 
         if ($this->userId) {
             \Filament\Notifications\Notification::make()
-                ->title("Sync Dispatcher Failed")
-                ->body("Failed to dispatch {$this->entityType} sync: " . $exception->getMessage())
+                ->title("Dispatcher Sinkronisasi Gagal")
+                ->body("Gagal menjalankan sinkronisasi {$this->entityType}: " . $exception->getMessage())
                 ->danger()
                 ->sendToDatabase(\App\Models\User::find($this->userId));
         }
