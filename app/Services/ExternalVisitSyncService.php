@@ -91,13 +91,13 @@ class ExternalVisitSyncService
             'tanggal_visit' => $visit->visit_date->format('Y-m-d'),
             'user_id' => $visit->user_id,
             'outlet_id' => $visit->outlet_id,
-            'tipe_visit' => $this->mapVisitType($visit->type),
+            'tipe_visit' => $visit->type, // Send original value: EXTRACALL or PLANNED
             'latlong_in' => $visit->checkin_location,
             'latlong_out' => $visit->checkout_location,
             'check_in_time' => $visit->checkin_time ? $visit->checkin_time->format('Y-m-d H:i:s') : null,
             'check_out_time' => $visit->checkout_time ? $visit->checkout_time->format('Y-m-d H:i:s') : null,
             'laporan_visit' => $visit->report,
-            'transaksi' => $this->mapTransactionStatus($visit->transaction),
+            'transaksi' => $visit->transaction, // Send original value: YES or NO
             'durasi_visit' => $visit->duration,
             'checkin_photo' => $visit->checkin_photo,
             'checkout_photo' => $visit->checkout_photo,
@@ -141,6 +141,16 @@ class ExternalVisitSyncService
                         'Content-Type' => Storage::mimeType($checkinPhotoPath)
                     ]
                 ];
+                Log::info('Checkin photo added to multipart', [
+                    'original_path' => $data['checkin_photo'],
+                    'resolved_path' => $checkinPhotoPath,
+                    'filename' => basename($data['checkin_photo']),
+                    'mime_type' => Storage::mimeType($checkinPhotoPath)
+                ]);
+            } else {
+                Log::warning('Checkin photo not found', [
+                    'photo_path' => $data['checkin_photo']
+                ]);
             }
         }
 
@@ -155,6 +165,16 @@ class ExternalVisitSyncService
                         'Content-Type' => Storage::mimeType($checkoutPhotoPath)
                     ]
                 ];
+                Log::info('Checkout photo added to multipart', [
+                    'original_path' => $data['checkout_photo'],
+                    'resolved_path' => $checkoutPhotoPath,
+                    'filename' => basename($data['checkout_photo']),
+                    'mime_type' => Storage::mimeType($checkoutPhotoPath)
+                ]);
+            } else {
+                Log::warning('Checkout photo not found', [
+                    'photo_path' => $data['checkout_photo']
+                ]);
             }
         }
 
@@ -162,41 +182,19 @@ class ExternalVisitSyncService
             ->asMultipart()
             ->post($url, $multipart);
 
+        Log::info('External API request sent', [
+            'url' => $url,
+            'form_fields' => collect($multipart)->whereNotIn('name', ['picture_visit_in', 'picture_visit_out'])->toArray(),
+            'has_checkin_photo' => collect($multipart)->where('name', 'picture_visit_in')->isNotEmpty(),
+            'has_checkout_photo' => collect($multipart)->where('name', 'picture_visit_out')->isNotEmpty(),
+            'response_status' => $response->status()
+        ]);
+
         if (!$response->successful()) {
             throw new \Exception("Failed to post visit to external API. Status: {$response->status()}, Body: {$response->body()}");
         }
 
         return $response;
-    }
-
-    /**
-     * Map visit type to external format
-     *
-     * @param string $type
-     * @return string
-     */
-    private function mapVisitType(string $type): string
-    {
-        return match($type) {
-            'PLANNED' => 'rutin',
-            'EXTRACALL' => 'ekstrakol',
-            default => 'rutin'
-        };
-    }
-
-    /**
-     * Map transaction status to external format
-     *
-     * @param string $transaction
-     * @return string
-     */
-    private function mapTransactionStatus(string $transaction): string
-    {
-        return match($transaction) {
-            'YES' => 'Ada transaksi',
-            'NO' => 'Tidak ada transaksi',
-            default => 'Tidak ada transaksi'
-        };
     }
 
     /**
@@ -207,6 +205,10 @@ class ExternalVisitSyncService
      */
     private function getPhotoPath(string $photoPath): ?string
     {
+        if (empty($photoPath)) {
+            return null;
+        }
+
         // If it's already a full path, return as is
         if (Storage::exists($photoPath)) {
             return $photoPath;
@@ -217,6 +219,21 @@ class ExternalVisitSyncService
         if (Storage::exists($publicPath)) {
             return $publicPath;
         }
+
+        // Try with upload path from config
+        $uploadPath = config('business.upload.path', 'uploads') . '/' . $photoPath;
+        if (Storage::exists($uploadPath)) {
+            return $uploadPath;
+        }
+
+        Log::warning('Photo file not found in storage', [
+            'photo_path' => $photoPath,
+            'tried_paths' => [
+                $photoPath,
+                $publicPath,
+                $uploadPath
+            ]
+        ]);
 
         return null;
     }
