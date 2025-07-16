@@ -132,20 +132,24 @@ class ExternalVisitSyncService
         // Add photo files if they exist
         if (!empty($data['checkin_photo'])) {
             $checkinPhotoPath = $this->getPhotoPath($data['checkin_photo']);
-            if ($checkinPhotoPath && Storage::exists($checkinPhotoPath)) {
+            if ($checkinPhotoPath) {
+                $publicDisk = Storage::disk('public');
+                $fileContents = $publicDisk->get($checkinPhotoPath);
+                $mimeType = mime_content_type($publicDisk->path($checkinPhotoPath));
+
                 $multipart[] = [
                     'name' => 'picture_visit_in',
-                    'contents' => Storage::get($checkinPhotoPath),
+                    'contents' => $fileContents,
                     'filename' => basename($data['checkin_photo']),
                     'headers' => [
-                        'Content-Type' => Storage::mimeType($checkinPhotoPath)
+                        'Content-Type' => $mimeType
                     ]
                 ];
                 Log::info('Checkin photo added to multipart', [
                     'original_path' => $data['checkin_photo'],
                     'resolved_path' => $checkinPhotoPath,
                     'filename' => basename($data['checkin_photo']),
-                    'mime_type' => Storage::mimeType($checkinPhotoPath)
+                    'mime_type' => $mimeType
                 ]);
             } else {
                 Log::error('Checkin photo is required but not found', [
@@ -160,20 +164,24 @@ class ExternalVisitSyncService
 
         if (!empty($data['checkout_photo'])) {
             $checkoutPhotoPath = $this->getPhotoPath($data['checkout_photo']);
-            if ($checkoutPhotoPath && Storage::exists($checkoutPhotoPath)) {
+            if ($checkoutPhotoPath) {
+                $publicDisk = Storage::disk('public');
+                $fileContents = $publicDisk->get($checkoutPhotoPath);
+                $mimeType = mime_content_type($publicDisk->path($checkoutPhotoPath));
+
                 $multipart[] = [
                     'name' => 'picture_visit_out',
-                    'contents' => Storage::get($checkoutPhotoPath),
+                    'contents' => $fileContents,
                     'filename' => basename($data['checkout_photo']),
                     'headers' => [
-                        'Content-Type' => Storage::mimeType($checkoutPhotoPath)
+                        'Content-Type' => $mimeType
                     ]
                 ];
                 Log::info('Checkout photo added to multipart', [
                     'original_path' => $data['checkout_photo'],
                     'resolved_path' => $checkoutPhotoPath,
                     'filename' => basename($data['checkout_photo']),
-                    'mime_type' => Storage::mimeType($checkoutPhotoPath)
+                    'mime_type' => $mimeType
                 ]);
             } else {
                 Log::error('Checkout photo is required but not found', [
@@ -223,27 +231,27 @@ class ExternalVisitSyncService
         $photoPath = ltrim($photoPath, '/');
 
         // If path starts with 'storage/', it's a public URL path
-        // Convert /storage/filename to public/filename for Storage facade
+        // Convert /storage/filename to filename for public disk
         if (str_starts_with($photoPath, 'storage/')) {
-            $photoPath = str_replace('storage/', 'public/', $photoPath);
+            $filename = str_replace('storage/', '', $photoPath);
         } else {
-            // If it doesn't start with storage/, assume it's already a storage path
-            // Try to find it in public storage first
-            $photoPath = 'public/' . $photoPath;
+            // If it doesn't start with storage/, assume it's already a filename
+            $filename = $photoPath;
         }
 
-        // Check if file exists in the resolved path
-        if (Storage::exists($photoPath)) {
-            Log::info('Photo found in storage', [
+        // Use public disk to check if file exists
+        $publicDisk = Storage::disk('public');
+        if ($publicDisk->exists($filename)) {
+            Log::info('Photo found in public storage', [
                 'original_path' => func_get_arg(0),
-                'resolved_path' => $photoPath
+                'resolved_filename' => $filename
             ]);
-            return $photoPath;
+            return $filename;
         }
 
-        Log::warning('Photo file not found in storage', [
+        Log::warning('Photo file not found in public storage', [
             'photo_path' => func_get_arg(0),
-            'resolved_path' => $photoPath
+            'resolved_filename' => $filename
         ]);
 
         return null;
