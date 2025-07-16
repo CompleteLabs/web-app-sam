@@ -148,10 +148,14 @@ class ExternalVisitSyncService
                     'mime_type' => Storage::mimeType($checkinPhotoPath)
                 ]);
             } else {
-                Log::warning('Checkin photo not found', [
+                Log::error('Checkin photo is required but not found', [
                     'photo_path' => $data['checkin_photo']
                 ]);
+                throw new \Exception("Checkin photo is required but file not found: {$data['checkin_photo']}");
             }
+        } else {
+            Log::error('Checkin photo is required but not provided');
+            throw new \Exception("Checkin photo is required but not provided");
         }
 
         if (!empty($data['checkout_photo'])) {
@@ -172,10 +176,14 @@ class ExternalVisitSyncService
                     'mime_type' => Storage::mimeType($checkoutPhotoPath)
                 ]);
             } else {
-                Log::warning('Checkout photo not found', [
+                Log::error('Checkout photo is required but not found', [
                     'photo_path' => $data['checkout_photo']
                 ]);
+                throw new \Exception("Checkout photo is required but file not found: {$data['checkout_photo']}");
             }
+        } else {
+            Log::error('Checkout photo is required but not provided');
+            throw new \Exception("Checkout photo is required but not provided");
         }
 
         $response = Http::timeout($this->timeout)
@@ -187,6 +195,8 @@ class ExternalVisitSyncService
             'form_fields' => collect($multipart)->whereNotIn('name', ['picture_visit_in', 'picture_visit_out'])->toArray(),
             'has_checkin_photo' => collect($multipart)->where('name', 'picture_visit_in')->isNotEmpty(),
             'has_checkout_photo' => collect($multipart)->where('name', 'picture_visit_out')->isNotEmpty(),
+            'checkin_photo_size' => collect($multipart)->where('name', 'picture_visit_in')->first()['contents'] ? strlen(collect($multipart)->where('name', 'picture_visit_in')->first()['contents']) : 0,
+            'checkout_photo_size' => collect($multipart)->where('name', 'picture_visit_out')->first()['contents'] ? strlen(collect($multipart)->where('name', 'picture_visit_out')->first()['contents']) : 0,
             'response_status' => $response->status()
         ]);
 
@@ -209,32 +219,34 @@ class ExternalVisitSyncService
             return null;
         }
 
-        // If it's already a full path, return as is
+        // Remove leading slash if present
+        $photoPath = ltrim($photoPath, '/');
+
+        // If path starts with 'storage/', it's a public URL path
+        // Convert /storage/filename to public/filename for Storage facade
+        if (str_starts_with($photoPath, 'storage/')) {
+            $photoPath = str_replace('storage/', 'public/', $photoPath);
+        } else {
+            // If it doesn't start with storage/, assume it's already a storage path
+            // Try to find it in public storage first
+            $photoPath = 'public/' . $photoPath;
+        }
+
+        // Check if file exists in the resolved path
         if (Storage::exists($photoPath)) {
+            Log::info('Photo found in storage', [
+                'original_path' => func_get_arg(0),
+                'resolved_path' => $photoPath
+            ]);
             return $photoPath;
         }
 
-        // Try with public prefix
-        $publicPath = 'public/' . $photoPath;
-        if (Storage::exists($publicPath)) {
-            return $publicPath;
-        }
-
-        // Try with upload path from config
-        $uploadPath = config('business.upload.path', 'uploads') . '/' . $photoPath;
-        if (Storage::exists($uploadPath)) {
-            return $uploadPath;
-        }
-
         Log::warning('Photo file not found in storage', [
-            'photo_path' => $photoPath,
-            'tried_paths' => [
-                $photoPath,
-                $publicPath,
-                $uploadPath
-            ]
+            'photo_path' => func_get_arg(0),
+            'resolved_path' => $photoPath
         ]);
 
         return null;
     }
+
 }
