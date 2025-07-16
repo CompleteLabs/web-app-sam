@@ -4,14 +4,19 @@ namespace App\Filament\Resources;
 
 use App\Filament\Filters\TrashedFilter;
 use App\Filament\Resources\VisitResource\Pages;
+use App\Jobs\PostVisitToExternalJob;
 use App\Models\Visit;
+use App\Services\ExternalVisitSyncService;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 
 class VisitResource extends Resource
 {
@@ -130,7 +135,7 @@ class VisitResource extends Resource
                                         if ($userId) {
                                             $userModel = \App\Models\User::find($userId);
                                             $username = $userModel?->username ?? 'user';
-                                            $username = \Str::slug($username);
+                                            $username = Str::slug($username);
                                         } else {
                                             $username = 'user';
                                         }
@@ -150,7 +155,7 @@ class VisitResource extends Resource
                                         if ($userId) {
                                             $userModel = \App\Models\User::find($userId);
                                             $username = $userModel?->username ?? 'user';
-                                            $username = \Str::slug($username);
+                                            $username = Str::slug($username);
                                         } else {
                                             $username = 'user';
                                         }
@@ -252,6 +257,26 @@ class VisitResource extends Resource
                         'NO' => 'heroicon-o-x-circle',
                         default => 'heroicon-o-question-mark-circle',
                     }),
+                Tables\Columns\TextColumn::make('external_sync_status')
+                    ->label('Sync Status')
+                    ->badge()
+                    ->color(fn(?string $state): string => match ($state) {
+                        'success' => 'success',
+                        'failed' => 'danger',
+                        default => 'gray',
+                    })
+                    ->icon(fn(?string $state): string => match ($state) {
+                        'success' => 'heroicon-o-check-circle',
+                        'failed' => 'heroicon-o-x-circle',
+                        default => 'heroicon-o-minus-circle',
+                    })
+                    ->formatStateUsing(fn(?string $state): string => match ($state) {
+                        'success' => 'Synced',
+                        'failed' => 'Failed',
+                        default => 'Not Synced',
+                    })
+                    ->visible(fn() => config('sync.post_api_enabled', false))
+                    ->toggleable(),
                 Tables\Columns\ImageColumn::make('checkin_photo')
                     ->label('Check-in Photo')
                     ->square()
@@ -338,13 +363,90 @@ class VisitResource extends Resource
                         }
                         return $indicators;
                     }),
+                Tables\Filters\SelectFilter::make('external_sync_status')
+                    ->label('Sync Status')
+                    ->options([
+                        'success' => 'Synced',
+                        'failed' => 'Failed',
+                        'not_synced' => 'Not Synced',
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        return $query->when(
+                            $data['value'] === 'not_synced',
+                            fn(Builder $query): Builder => $query->whereNull('external_sync_status')
+                        )->when(
+                            $data['value'] === 'success',
+                            fn(Builder $query): Builder => $query->where('external_sync_status', 'success')
+                        )->when(
+                            $data['value'] === 'failed',
+                            fn(Builder $query): Builder => $query->where('external_sync_status', 'failed')
+                        );
+                    })
+                    ->visible(fn() => config('sync.post_api_enabled', false)),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
+                Tables\Actions\Action::make('post_to_external')
+                    ->label('Post ke Sistem Eksternal')
+                    ->icon('heroicon-o-arrow-up-on-square')
+                    ->color('info')
+                    ->visible(fn(Visit $record) => config('sync.post_api_enabled', false) && $record->external_sync_status !== 'success')
+                    ->requiresConfirmation()
+                    ->modalHeading('Post Visit ke Sistem Eksternal')
+                    ->modalDescription('Apakah Anda yakin ingin mengirim data visit ini ke sistem eksternal?')
+                    ->modalSubmitActionLabel('Ya, Kirim')
+                    ->action(function (Visit $record) {
+                        try {
+                            $syncService = new ExternalVisitSyncService();
+                            $result = $syncService->postVisit($record);
+
+                            if ($result['success']) {
+                                Notification::make()
+                                    ->title('Berhasil!')
+                                    ->body($result['message'])
+                                    ->success()
+                                    ->send();
+                            } else {
+                                Notification::make()
+                                    ->title('Gagal!')
+                                    ->body($result['message'])
+                                    ->danger()
+                                    ->send();
+                            }
+                        } catch (\Exception $e) {
+                            Notification::make()
+                                ->title('Error!')
+                                ->body('Terjadi kesalahan: ' . $e->getMessage())
+                                ->danger()
+                                ->send();
+                        }
+                    }),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make(),
+                    Tables\Actions\BulkAction::make('post_to_external')
+                        ->label('Post ke Sistem Eksternal')
+                        ->icon('heroicon-o-arrow-up-on-square')
+                        ->color('info')
+                        ->visible(fn() => config('sync.post_api_enabled', false))
+                        ->requiresConfirmation()
+                        ->modalHeading('Post Visit ke Sistem Eksternal')
+                        ->modalDescription('Apakah Anda yakin ingin mengirim data visit yang dipilih ke sistem eksternal?')
+                        ->modalSubmitActionLabel('Ya, Kirim Semua')
+                        ->action(function (Collection $records) {
+                            $visitIds = $records->pluck('id')->toArray();
+                            $userId = Auth::id();
+
+                            // Dispatch job for batch processing
+                            PostVisitToExternalJob::dispatch($visitIds, $userId);
+
+                            Notification::make()
+                                ->title('Batch Post Dimulai!')
+                                ->body('Proses post ' . count($visitIds) . ' visit ke sistem eksternal telah dimulai. Anda akan menerima notifikasi setelah selesai.')
+                                ->info()
+                                ->send();
+                        }),
                 ]),
             ]);
     }

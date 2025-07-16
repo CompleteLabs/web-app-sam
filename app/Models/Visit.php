@@ -27,6 +27,10 @@ class Visit extends Model
         'duration',
         'transaction',
         'report',
+        'external_synced',
+        'external_synced_at',
+        'external_sync_response',
+        'external_sync_status',
         'created_at',
         'updated_at',
     ];
@@ -37,6 +41,9 @@ class Visit extends Model
         'checkout_time' => 'datetime',
         'transaction' => 'string',
         'duration' => 'integer',
+        'external_synced' => 'boolean',
+        'external_synced_at' => 'datetime',
+        'external_sync_response' => 'array',
     ];
 
     // Kolom yang ditampilkan pada list

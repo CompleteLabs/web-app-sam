@@ -2,6 +2,8 @@
 
 namespace App\Jobs;
 
+use App\Jobs\PostVisitToExternalJob;
+use App\Models\Visit;
 use App\Services\FileUploadService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -99,6 +101,9 @@ class ProcessFileUploadJob implements ShouldQueue
                 'processed_files' => count($processedFiles)
             ]);
 
+            // Auto-trigger external sync for Visit models if enabled
+            $this->triggerExternalSyncIfNeeded();
+
         } catch (\Exception $e) {
             Log::error('Error in file upload job: ' . $e->getMessage(), [
                 'model_class' => $this->modelClass,
@@ -141,6 +146,46 @@ class ProcessFileUploadJob implements ShouldQueue
             Log::error('Error updating model with processed files: ' . $e->getMessage(), [
                 'model_class' => $this->modelClass,
                 'model_id' => $this->modelId,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Trigger external sync job for Visit models if enabled
+     */
+    private function triggerExternalSyncIfNeeded(): void
+    {
+        // Only trigger for Visit models
+        if ($this->modelClass !== Visit::class) {
+            return;
+        }
+
+        // Only trigger if external sync is enabled and auto-sync is enabled
+        if (!config('sync.post_api_enabled', false) || !config('sync.auto_sync_after_file_upload', true)) {
+            Log::info('External sync is disabled or auto-sync is disabled, skipping auto-sync for Visit', [
+                'visit_id' => $this->modelId,
+                'post_api_enabled' => config('sync.post_api_enabled', false),
+                'auto_sync_enabled' => config('sync.auto_sync_after_file_upload', true)
+            ]);
+            return;
+        }
+
+        // Dispatch the external sync job
+        try {
+            $delaySeconds = config('sync.auto_sync_delay_seconds', 10);
+            PostVisitToExternalJob::forSingleVisit($this->modelId, $this->userId)
+                ->delay(now()->addSeconds($delaySeconds))
+                ->dispatch();
+
+            Log::info('External sync job dispatched for Visit after file upload', [
+                'visit_id' => $this->modelId,
+                'user_id' => $this->userId,
+                'delay_seconds' => $delaySeconds
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to dispatch external sync job for Visit', [
+                'visit_id' => $this->modelId,
                 'error' => $e->getMessage()
             ]);
         }
